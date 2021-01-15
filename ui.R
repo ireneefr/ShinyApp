@@ -2,6 +2,7 @@
 # library(rsconnect)
 # deployApp("/mnt/ElRaid/ifernandez/R/shinyepico_input")
 
+
 # Load packages
 library(shiny)
 library(shinydashboard)
@@ -36,11 +37,11 @@ shinyUI(dashboardPage(
               verticalLayout( 
               # Box 1
               box(title = "Input",
-                  sidebarPanel(width = 30,   #anchura de sidebarPanel
-                               fileInput("inputfile",    #nombre para acceder a este input
-                                         "Introducir input", #label que aparece en la app
-                                         multiple = FALSE, #solo un file hay que subir
-                                         accept = ".zip" #acceptar solo cierto tipo de documentos, ¿?
+                  sidebarPanel(width = 30, 
+                               fileInput("inputfile",
+                                         "Introducir input",
+                                         multiple = FALSE,
+                                         accept = ".zip"
                                ), 
                                uiOutput("inputbutton")
                   
@@ -49,9 +50,27 @@ shinyUI(dashboardPage(
               # Box 2
               
               box(mainPanel(
-                  #withSpinner - loading animation (8 types)
-                  withSpinner(dataTableOutput("datatable"), type = 7)
-              ))
+                  width = 9,
+                  withSpinner(DT::DTOutput("datatable"))
+              )),
+              
+              conditionalPanel("typeof output.datatable != 'undefined'",
+                               box(
+                               selectInput("select_input_samplenamevar", "", c()),
+                               selectInput("select_input_groupingvar", "", c()),
+                               selectInput("select_input_donorvar", "", c()),
+                               pickerInput(
+                                   inputId = "selected_samples",
+                                   label = "",
+                                   choices = c(),
+                                   options = list(
+                                       `actions-box` = TRUE,
+                                       size = 10,
+                                       `selected-text-format` = "count > 3"
+                                   ),
+                                   multiple = TRUE
+                               ),
+                               actionButton("button_input_next", "Continue")))
             ))
         ),
         

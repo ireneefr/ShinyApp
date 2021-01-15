@@ -6,11 +6,10 @@
 #
 #    http://shiny.rstudio.com/
 #
-
 library(shiny)
 
 # Define server logic required to draw a histogram
-shinyServer(function(input, output) {
+shinyServer(function(input, output, session) {
     
     output$inputbutton <- renderUI({
         if (!is.null(input$inputfile$datapath)) {
@@ -21,7 +20,6 @@ shinyServer(function(input, output) {
     })
     
     observeEvent(input$inputfile, shinyjs::enable("inputbuttonaction"))
-    
     
     # When you press button_input_load, the data is unzipped and the metharray sheet is loaded
     rval_sheet <- eventReactive(input$inputbuttonaction, {
@@ -65,13 +63,211 @@ shinyServer(function(input, output) {
     })
     
     
+    
+    output$datatable <- DT::renderDT(
+        rval_sheet(),
+        rownames = FALSE,
+        selection = "single",
+        style = "bootstrap",
+        options = list(
+            pageLength = 10,
+            autoWidth = TRUE,
+            scrollX = TRUE,
+            columnDefs = list(list(
+                targets = match("Basename", colnames(rval_sheet())) - 1, visible = FALSE
+            ))
+        )
+    )
+    
+
+    
+    
+    rval_sheet_target <- eventReactive(
+        input$button_input_next,
+        rval_sheet()[rval_sheet()[[input$select_input_samplenamevar]] %in% input$selected_samples, ]
+    )
+    
+    
+    rval_clean_sheet_target <- eventReactive(rval_gset(), {
+        generate_clean_samplesheet(target_samplesheet = minfi::pData(rval_gset()),
+                                   donorvar = input$select_input_donorvar)
+        
+    })
+    
+    
+    # When you press button_input_load, the form options are updated
+    observeEvent(input$inputbutton, {
+        updateSelectInput(
+            session,
+            "select_input_samplenamevar",
+            label = "Select Sample Names Column:",
+            choices = colnames(rval_sheet())
+        )
+        
+        updateSelectInput(
+            session,
+            "select_input_groupingvar",
+            label = "Select Variable of Interest:",
+            choices = colnames(rval_sheet())
+        )
+        updateSelectInput(
+            session,
+            "select_input_donorvar",
+            label = "Select Donor Variable:",
+            choices = colnames(rval_sheet())
+        )
+        
+       shinyjs::enable("button_input_next") # Enable button continue
+    })
+    
+    # The checkbox of samples to process is updated when samplenamevar changes
+    observeEvent(
+        {
+            input$select_input_samplenamevar
+            input$select_input_groupingvar
+        },
+        updatePickerInput(
+            session,
+            "selected_samples",
+            label = "Select Samples to Process:",
+            selected = rval_sheet()[, input$select_input_samplenamevar],
+            choices = rval_sheet()[, input$select_input_samplenamevar],
+            choicesOpt = list(subtext = paste("Group: ", rval_sheet()[, input$select_input_groupingvar]))
+        )
+    )
+    
+    # when samples selected are changed, continue button is enabled again
+    observeEvent(input$selected_samples, shinyjs::enable("button_input_next"))
+    
+    
+    
+    
+    # rval_rgset loads RGSet using read.metharray.exp and the sample sheet (rval_sheet())
+    rval_rgset <- eventReactive(input$button_input_next, ignoreNULL = FALSE, {
+        validate(need(input$fileinput_input != "", "Data has not been uploaded yet"))
+        
+        # Prior check to test variable selection
+        if (anyDuplicated(rval_sheet_target()[, input$select_input_samplenamevar]) > 0 |
+            anyDuplicated(rval_sheet_target()[, input$select_input_groupingvar]) == 0) {
+            showModal(
+                modalDialog(
+                    title = "Variable error",
+                    "Check if selected variables are correct. Sample Name Variable should not have duplicated values
+          and the variable of interest should have groups greater than 1.",
+                    easyClose = TRUE,
+                    footer = NULL
+                )
+            )
+        }
+        
+        # Check prior conditions to read data
+        validate(need(
+            anyDuplicated(rval_sheet_target()[, input$select_input_samplenamevar]) == 0,
+            "Sample Name Variable should not have duplicated values"
+        ))
+        validate(need(
+            anyDuplicated(rval_sheet_target()[, input$select_input_groupingvar]) > 0,
+            "Grouping variable should have groups greater than 1"
+        ))
+        
+        # disable button to avoid multiple clicks
+        shinyjs::disable("button_input_next")
+        
+        
+        # We need to check if this step works
+        withProgress(
+            message = "Reading array data...",
+            value = 2,
+            max = 5,
+            {
+                try({
+                    RGSet <- read_idats(
+                        targets = rval_sheet_target())
+                })
+                
+                if (!exists("RGSet", inherits = FALSE)) {
+                    showModal(
+                        modalDialog(
+                            title = "reading error",
+                            "Minfi can't read arrays specified in your samplesheet. Please, check your zipfile and your sampleSheet",
+                            easyClose = TRUE,
+                            footer = NULL
+                        )
+                    )
+                    shinyjs::disable("button_minfi_select")
+                }
+                
+                validate(
+                    need(
+                        exists("RGSet", inherits = FALSE),
+                        "Minfi can't read arrays specified in your samplesheet. Please, check your zipfile and your sampleSheet"
+                    )
+                )
+                
+                #Checking array type and annotation
+                nProbes = length(minfi::featureNames(RGSet))
+                
+                if(nProbes >= 622000 & nProbes <= 623000){
+                    
+                    if (!requireNamespace("IlluminaHumanMethylation450kanno.ilmn12.hg19", quietly = TRUE) |
+                        !requireNamespace("IlluminaHumanMethylation450kmanifest", quietly = TRUE))
+                    {
+                        showModal(
+                            modalDialog(
+                                title = "Missing package(s)",
+                                "450k annotation or manifest packages are not available. Please, install IlluminaHumanMethylation450kmanifest and IlluminaHumanMethylation450kanno.ilmn12.hg19 packages and restart the application.",
+                                easyClose = TRUE,
+                                footer = NULL
+                            )
+                        )
+                    }
+                    
+                    validate(
+                        need(
+                            requireNamespace("IlluminaHumanMethylation450kanno.ilmn12.hg19", quietly = TRUE) &
+                                requireNamespace("IlluminaHumanMethylation450kmanifest", quietly = TRUE),
+                            "450k annotation or manifest packages are not available. Please, install IlluminaHumanMethylation450kmanifest and IlluminaHumanMethylation450kanno.ilmn12.hg19 packages."
+                        )
+                    )
+                }
+                else if (nProbes >= 1032000 & nProbes <= 1053000){
+                    
+                    if (!requireNamespace("IlluminaHumanMethylationEPICanno.ilm10b4.hg19", quietly = TRUE) |
+                        !requireNamespace("IlluminaHumanMethylationEPICmanifest", quietly = TRUE))
+                    {
+                        showModal(
+                            modalDialog(
+                                title = "Missing package(s)",
+                                "EPIC annotation or manifest packages are not available. Please, install IlluminaHumanMethylationEPICmanifest and IlluminaHumanMethylationEPICanno.ilm10b4.hg19 packages and restart the application.",
+                                easyClose = TRUE,
+                                footer = NULL
+                            )
+                        )
+                    }
+                    
+                    validate(
+                        need(
+                            requireNamespace("IlluminaHumanMethylationEPICanno.ilm10b4.hg19", quietly = TRUE) &
+                                requireNamespace("IlluminaHumanMethylationEPICmanifest", quietly = TRUE),
+                            "EPIC annotation or manifest packages are not available. Please, install IlluminaHumanMethylationEPICmanifest and IlluminaHumanMethylationEPICanno.ilm10b4.hg19 packages."
+                        )
+                    )
+                }
+                
+                # analysis restarted
+                rval_analysis_finished(FALSE)
+                rval_dmrs_finished(FALSE)
+                
+                # we return RGSet
+                RGSet
+            }
+        )
+    })
+    
+    
 
 
     
-    output$datatable <- renderDataTable({
 
-        rval_sheet()
-
-    })
 
 })
