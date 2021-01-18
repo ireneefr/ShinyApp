@@ -7,6 +7,7 @@
 #    http://shiny.rstudio.com/
 #
 library(shiny)
+source("utils_analysis.R")
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output, session) {

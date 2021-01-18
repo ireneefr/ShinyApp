@@ -1,3 +1,4 @@
+
 # Upload app to shinyapps.io
 # library(rsconnect)
 # deployApp("/mnt/ElRaid/ifernandez/R/shinyepico_input")
@@ -91,7 +92,7 @@ shinyUI(dashboardPage(
         ),
         
         # NORMALIZATION
-        tabItem(tabName = "Normalization", 
+        tabItem(tabName = "normalization", 
             fluidPage(
                 verticalLayout(
                     # Box1
