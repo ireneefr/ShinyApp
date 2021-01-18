@@ -11,21 +11,35 @@ library(shiny)
 # Define server logic required to draw a histogram
 shinyServer(function(input, output, session) {
     
-    output$inputbutton <- renderUI({
-        if (!is.null(input$inputfile$datapath)) {
-            return(actionButton("inputbuttonaction", "Load Data"))
+    # Max size
+    options(shiny.maxRequestSize = 100*1024^2) #5MB getShinyOption("shiny.maxRequestSize") | 30*1024^2 = 30MB
+    
+    # INITIALIZE REACTIVE VARIABLES
+    rval_generated_limma_model <- reactiveVal(value = FALSE)
+    rval_analysis_finished <- reactiveVal(value = FALSE)
+    rval_filteredlist2heatmap_valid <- reactiveVal(value = FALSE)
+    rval_filteredmcsea2heatmap_valid <- reactiveVal(value = FALSE)
+    rval_dmrs_finished <- reactiveVal(value = FALSE)
+    rval_dmrs_ready2heatmap <- reactiveVal(value = FALSE)
+    rval_dmrs_ready2mcsea <- reactiveVal(value = FALSE)
+    
+    
+    # Load button
+    output$ui_button_input_load <- renderUI({
+        if (!is.null(input$fileinput_input$datapath)) {
+            return(actionButton("button_input_load", "Load Data"))
         } else {
             return()
         }
     })
     
-    observeEvent(input$inputfile, shinyjs::enable("inputbuttonaction"))
+    observeEvent(input$fileinput_input, shinyjs::enable("button_input_load"))
     
     # When you press button_input_load, the data is unzipped and the metharray sheet is loaded
-    rval_sheet <- eventReactive(input$inputbuttonaction, {
+    rval_sheet <- eventReactive(input$button_input_load, {
         
         # Check if updated file is .zip
-        validate(need(tools::file_ext(input$inputfile$datapath) == "zip", "File extension should be .zip"))
+        validate(need(tools::file_ext(input$fileinput_input$datapath) == "zip", "File extension should be .zip"))
         
         shinyjs::disable("button_input_load") # disable the load button to avoid multiple clicks
         
@@ -33,7 +47,7 @@ shinyServer(function(input, output, session) {
             unlink(paste0(tempdir(), "/experiment_data"), recursive = TRUE) # remove current files in target directory
         }
         
-        zip::unzip(input$inputfile$datapath,
+        zip::unzip(input$fileinput_input$datapath,
                    exdir = paste0(tempdir(), "/experiment_data")
         ) # extracting zip
         
@@ -60,11 +74,11 @@ shinyServer(function(input, output, session) {
         colnames(sheet) <- make.names(colnames(sheet)) # fix possible not-valid colnames
         
         sheet
+        #print(colnames(sheet))
     })
     
-    
-    
-    output$datatable <- DT::renderDT(
+
+    output$samples_table <- DT::renderDT(
         rval_sheet(),
         rownames = FALSE,
         selection = "single",
@@ -84,7 +98,7 @@ shinyServer(function(input, output, session) {
     
     rval_sheet_target <- eventReactive(
         input$button_input_next,
-        rval_sheet()[rval_sheet()[[input$select_input_samplenamevar]] %in% input$selected_samples, ]
+        rval_sheet()[rval_sheet()[[input$select_input_samplenamevar]] %in% input$selected_samples, ],
     )
     
     
@@ -96,12 +110,12 @@ shinyServer(function(input, output, session) {
     
     
     # When you press button_input_load, the form options are updated
-    observeEvent(input$inputbutton, {
+    observeEvent(input$button_input_load, {
         updateSelectInput(
             session,
             "select_input_samplenamevar",
             label = "Select Sample Names Column:",
-            choices = colnames(rval_sheet())
+            choices = colnames(rval_sheet()),
         )
         
         updateSelectInput(
@@ -260,6 +274,106 @@ shinyServer(function(input, output, session) {
                 
                 # we return RGSet
                 RGSet
+            }
+        )
+    })
+    
+
+    
+    
+    
+    
+    # We change the page to the next one
+    observeEvent(input$button_input_next, {
+        # check if rgset is loaded
+        req(rval_rgset())
+        
+        # update PCA parameters
+        updateSelectInput(
+            session,
+            "select_minfi_pcaplot_pcx",
+            choices = paste0("PC", seq_len(nrow(rval_sheet_target()))),
+            selected = "PC1"
+        )
+        
+        updateSelectInput(
+            session,
+            "select_minfi_pcaplot_pcy",
+            choices = paste0("PC", seq_len(nrow(rval_sheet_target()))),
+            selected = "PC2"
+        )
+        
+        updateSelectInput(
+            session,
+            "select_minfi_pcaplot_color",
+            choices = c(
+                colnames(rval_sheet_target()),
+                "xMed",
+                "yMed",
+                "predictedSex"
+            ),
+            
+            selected = input$select_input_groupingvar
+        )
+        
+        shinyjs::enable("button_minfi_select")
+        updateTabsetPanel(session, "menu", "normalization")
+    })
+    
+    
+    
+    
+    
+    # MINFI NORMALIZATION
+    
+    # Calculation of minfi normalized data
+    rval_gset <- eventReactive(input$button_minfi_select, {
+        validate(need(
+            !is.null(rval_rgset()),
+            "Raw data has not been loaded yet."
+        ))
+        
+        shinyjs::disable("button_minfi_select") # disable button to avoid repeat clicking
+        
+        withProgress(
+            message = "Normalization in progress...",
+            value = 1,
+            max = 4,
+            {
+                try({
+                    gset <- normalize_rgset(
+                        rgset = rval_rgset(), normalization_mode = input$select_minfi_norm,
+                        detectP = 0.01, dropSNPs = input$select_minfi_dropsnps, maf = input$slider_minfi_maf,
+                        dropCpHs = input$select_minfi_dropcphs, dropSex = input$select_minfi_chromosomes
+                    )
+                })
+                
+                # check if normalization has worked
+                
+                if (!exists("gset", inherits = FALSE)) {
+                    showModal(
+                        modalDialog(
+                            title = "Normalization failure",
+                            "An unexpected error has occurred during minfi normalization. Please, notify the error to the package maintainer.",
+                            easyClose = TRUE,
+                            footer = NULL
+                        )
+                    )
+                    shinyjs::enable("button_minfi_select")
+                }
+                
+                validate(
+                    need(
+                        exists("gset", inherits = FALSE),
+                        "An unexpected error has occurred during minfi normalization. Please, notify the error to the package maintainer."
+                    )
+                )
+                
+                # enable button
+                shinyjs::enable("button_minfi_select")
+                
+                # return gset
+                gset
             }
         )
     })
