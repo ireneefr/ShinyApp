@@ -1101,17 +1101,11 @@ shinyServer(function(input, output, session) {
 
 
     temp <- rval_annotation()[row.names(rval_annotation()) %in% rval_filteredlist()[[input$select_limma_anncontrast]]$cpg, ]
-    print("temp1, hello")
-    print(temp)
     temp$dif_beta <- rval_globaldifs()[[dif_target]][rval_globaldifs()[["cpg"]] %in% row.names(temp)]
-    print("temp$dif_beta, hello")
-    print(dif_beta)
     temp$fdr <- rval_filteredlist()[[input$select_limma_anncontrast]][["adj.P.Val"]][rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]] %in% row.names(temp)]
 
 
     temp
-    print("temp2, hello")
-    print(temp)
   })
 
   output$table_limma_ann <- DT::renderDT(
@@ -1494,7 +1488,7 @@ shinyServer(function(input, output, session) {
     selected_dmr <- row.names(rval_filteredmcsea()[[input$select_dmrs_selcont]][[input$select_dmrs_selreg]])[input$table_dmrs_table_rows_selected]
     col <- grDevices::rainbow(length(levels(rval_voi())))
 
-    mCSEA::mCSEAPlot(
+        mCSEA::mCSEAPlot(
       rval_mcsea()[[input$select_dmrs_selcont]],
       regionType = input$select_dmrs_selreg,
       dmrName = selected_dmr,
@@ -1535,6 +1529,8 @@ shinyServer(function(input, output, session) {
       )
     )
   )
+  
+  
   
   # EXPORT
   
