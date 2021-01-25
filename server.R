@@ -11,6 +11,7 @@ library(dplyr)
 
 source("utils_analysis.R")
 source("utils_graphs.R")
+source("utils_download.R")
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output, session) {
@@ -79,7 +80,6 @@ shinyServer(function(input, output, session) {
     colnames(sheet) <- make.names(colnames(sheet)) # fix possible not-valid colnames
 
     sheet
-    # print(colnames(sheet))
   })
 
 
@@ -1099,11 +1099,19 @@ shinyServer(function(input, output, session) {
       sep = "_"
     )
 
+
     temp <- rval_annotation()[row.names(rval_annotation()) %in% rval_filteredlist()[[input$select_limma_anncontrast]]$cpg, ]
+    print("temp1, hello")
+    print(temp)
     temp$dif_beta <- rval_globaldifs()[[dif_target]][rval_globaldifs()[["cpg"]] %in% row.names(temp)]
+    print("temp$dif_beta, hello")
+    print(dif_beta)
     temp$fdr <- rval_filteredlist()[[input$select_limma_anncontrast]][["adj.P.Val"]][rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]] %in% row.names(temp)]
 
+
     temp
+    print("temp2, hello")
+    print(temp)
   })
 
   output$table_limma_ann <- DT::renderDT(
@@ -1125,7 +1133,7 @@ shinyServer(function(input, output, session) {
 
   ind_boxplot <- eventReactive(input$button_limma_indboxplotcalc, {
     validate(need(!is.null(input$table_limma_ann_rows_selected), "A DMP should be selected."))
-    cpg_sel <- table_annotation()[["Name"]][input$table_limma_ann_rows_selected]
+        cpg_sel <- table_annotation()[["Name"]][input$table_limma_ann_rows_selected]
 
     create_individual_boxplot(rval_gset_getBeta(), cpg_sel, rval_voi())
   })
@@ -1527,4 +1535,601 @@ shinyServer(function(input, output, session) {
       )
     )
   )
+  
+  # EXPORT
+  
+  # R Objects
+  
+  output$download_export_robjects <- downloadHandler(
+      "R_Objects.zip",
+      content = function(file) {
+          shinyjs::disable("download_export_robjects")
+          withProgress(
+              message = "Generating R Objects...",
+              value = 1,
+              max = 4,
+              {
+                  rgset <- rval_rgset()
+                  gset <- rval_gset()
+                  fit <- rval_fit()
+                  design <- rval_design()
+                  ebayes_tables <- rval_finddifcpgs()
+                  bvalues <- rval_gset_getBeta()
+                  mvalues <- rval_gset_getM()
+                  global_difs <- rval_globaldifs()
+                  
+                  if (rval_dmrs_finished()) {
+                      dmr_results <- rval_mcsea()
+                  }
+                  else {
+                      dmr_results <- NULL
+                  }
+                  
+                  objetos <- list(
+                      RGSet = "rgset",
+                      GenomicRatioSet = "gset",
+                      fit = "fit",
+                      design = "design",
+                      ebayestables = "ebayes_tables",
+                      Bvalues = "bvalues",
+                      Mvalues = "mvalues",
+                      global_difs = "global_difs",
+                      dmr_results = "dmr_results"
+                  )
+                  
+                  setProgress(value = 2, message = "Saving RObjects...")
+                  
+                  for (id in input$select_export_objects2download) {
+                      do.call(function(object, name) saveRDS(object, file = paste0(tempdir(), "/", name, ".RDS")), list(object = as.name(objetos[[id]]), name = objetos[[id]]))
+                  }
+                  
+                  objects2save <- list.files(tempdir(), pattern = "*.RDS", full.names = TRUE)
+                  
+                  setProgress(value = 3, message = "Compressing RObjects...")
+                  zip::zip(
+                      file,
+                      objects2save,
+                      recurse = FALSE,
+                      include_directories = FALSE,
+                      mode = "cherry-pick"
+                  )
+                  shinyjs::enable("download_export_robjects")
+              }
+          )
+      }
+  )
+  
+  rval_annotation <- reactive({
+      int_cols <- c(
+          "Name",
+          "Relation_to_Island",
+          "UCSC_RefGene_Name",
+          "UCSC_RefGene_Group",
+          "chr",
+          "pos",
+          "strand"
+      )
+      
+      if (input$select_export_genometype == "hg38" &
+          (!requireNamespace("rtracklayer", quietly = TRUE)) |
+          !requireNamespace("GenomicRanges", quietly = TRUE)) {
+          showModal(
+              modalDialog(
+                  title = "rtracklayer::liftOver not available",
+                  "Rtracklayer is not installed and it is needed to liftOver annotation from hg19 to hg38 genome. Please, install the package and restart the R session.",
+                  easyClose = TRUE,
+                  footer = NULL
+              )
+          )
+          updateSelectInput(session,
+                            "select_export_genometype",
+                            choices = "hg19",
+                            selected = "hg19"
+          )
+      }
+      
+      withProgress(
+          message = "Generating annotation...",
+          max = 3,
+          value = 1,
+          {
+              annotation <- as.data.frame(minfi::getAnnotation(rval_gset()))
+              annotation <- annotation[, int_cols]
+              annotation$genome <- "hg19"
+              
+              if (input$select_export_genometype == "hg19") {
+                  annotation
+              }
+              else {
+                  chain <- rtracklayer::import.chain(system.file("hg19ToHg38.over.chain", package = "shinyepico"))
+                  
+                  ann_granges <- data.frame(
+                      chr = annotation$chr,
+                      start = annotation$pos - 1,
+                      end = annotation$pos,
+                      name = row.names(annotation)
+                  )
+                  ann_granges <- GenomicRanges::makeGRangesFromDataFrame(
+                      ann_granges,
+                      starts.in.df.are.0based = TRUE,
+                      keep.extra.columns = TRUE
+                  )
+                  ann_granges <- unlist(rtracklayer::liftOver(ann_granges, chain = chain))
+                  
+                  hg38 <- data.table::data.table(
+                      Name = GenomicRanges::mcols(ann_granges)[[1]],
+                      chr = as.character(GenomicRanges::seqnames(ann_granges)),
+                      pos = GenomicRanges::start(ann_granges),
+                      genome = "hg38"
+                  )
+                  
+                  annotation <- as.data.table(annotation[, !(colnames(annotation) %in% c("chr", "pos", "genome"))])
+                  
+                  hg38 <- as.data.frame(data.table::merge.data.table(
+                      x = annotation,
+                      y = hg38,
+                      by = "Name",
+                      all.x = TRUE
+                  ))
+                  row.names(hg38) <- hg38$Name
+                  
+                  hg38
+              }
+          }
+      )
+  })
+  
+  # Bed downloading enabling/disabling control
+  observe({
+      if (input$select_export_analysistype == "DMPs") {
+          if (rval_analysis_finished() &
+              rval_filteredlist2heatmap_valid() &
+              !is.null(rval_dendrogram())) {
+              shinyjs::enable("download_export_filteredbeds")
+          } else if (rval_analysis_finished() &
+                     input$select_export_bedtype == "by contrasts") {
+              shinyjs::enable("download_export_filteredbeds")
+          }
+          else {
+              shinyjs::disable("download_export_filteredbeds")
+          }
+      }
+      else if (input$select_export_analysistype == "DMRs") {
+          if (rval_dmrs_finished() &
+              rval_filteredmcsea2heatmap_valid() &
+              !is.null(rval_dendrogram_dmrs())) {
+              shinyjs::enable("download_export_filteredbeds")
+          } else if (rval_dmrs_finished() &
+                     input$select_export_bedtype == "by contrasts") {
+              shinyjs::enable("download_export_filteredbeds")
+          } else {
+              shinyjs::disable("download_export_filteredbeds")
+          }
+      }
+  })
+  
+  # heatmap downloading enable/disable
+  observe({
+      if (input$select_export_heatmaptype == "DMPs") {
+          if (rval_analysis_finished() & rval_filteredlist2heatmap_valid()) {
+              shinyjs::enable("download_export_heatmaps")
+          } else {
+              shinyjs::disable("download_export_heatmaps")
+          }
+      }
+      else {
+          if (rval_dmrs_finished() & rval_filteredmcsea2heatmap_valid()) {
+              shinyjs::enable("download_export_heatmaps")
+          } else {
+              shinyjs::disable("download_export_heatmaps")
+          }
+      }
+  })
+  
+  
+  # Filtered BEDs
+  output$download_export_filteredbeds <- downloadHandler(
+      "filtered_beds.zip",
+      content = function(file) {
+          shinyjs::disable("download_export_filteredbeds")
+          withProgress(
+              message = "Generating BED files...",
+              value = 1,
+              max = 4,
+              {
+                  if (input$select_export_bedtype == "by heatmap cluster" & input$select_export_analysistype == "DMPs") {
+                      create_filtered_bed_clusters(
+                          dendro_data = rval_dendrogram(),
+                          annotation = rval_annotation(),
+                          directory = dirname(file)
+                      )
+                  }
+                  else if (input$select_export_bedtype == "by contrasts" & input$select_export_analysistype == "DMPs") {
+                      create_filtered_beds(rval_filteredlist(),
+                                           rval_annotation(),
+                                           directory = dirname(file)
+                      )
+                  }
+                  else if (input$select_export_bedtype == "by heatmap cluster" & input$select_export_analysistype == "DMRs") {
+                      create_filtered_bed_dmrs_clusters(
+                          dendro_data = rval_dendrogram_dmrs(),
+                          mcsea_filtered = rval_filteredmcsea(),
+                          annotation = rval_annotation(),
+                          directory = dirname(file)
+                      )
+                      create_dmrs_bed_background(
+                          mcsea_result = rval_mcsea(),
+                          collapse = TRUE,
+                          regionsTypes = input$select_dmrs_regions2plot,
+                          annotation = rval_annotation(),
+                          directory = dirname(file)
+                      )
+                  }
+                  else if (input$select_export_bedtype == "by contrasts" & input$select_export_analysistype == "DMRs") {
+                      create_filtered_beds_dmrs(
+                          mcsea_filtered = rval_filteredmcsea(),
+                          regionsTypes = input$select_dmrs_regions,
+                          annotation = rval_annotation(),
+                          directory = dirname(file)
+                      )
+                      create_dmrs_bed_background(
+                          mcsea_result = rval_mcsea(),
+                          collapse = FALSE,
+                          regionsTypes = input$select_dmrs_regions,
+                          annotation = rval_annotation(),
+                          directory = dirname(file)
+                      )
+                  }
+                  
+                  
+                  objects <- list.files(
+                      path = dirname(file),
+                      full.names = TRUE,
+                      pattern = "*.bed"
+                  )
+                  
+                  zip::zip(
+                      file,
+                      objects,
+                      recurse = FALSE,
+                      include_directories = FALSE,
+                      mode = "cherry-pick"
+                  )
+                  
+                  file.remove(objects) # removing objects after exporting
+                  
+                  shinyjs::enable("download_export_filteredbeds")
+              }
+          )
+      }
+  )
+  
+  # Markdown Report
+  output$download_export_markdown <- downloadHandler(
+      filename = "Report.html",
+      content = function(file) {
+          shinyjs::disable("download_export_markdown")
+          withProgress(
+              message = "Generating Report...",
+              value = 1,
+              max = 3,
+              {
+                  params <- list(
+                      rval_sheet = rval_sheet(),
+                      rval_sheet_target = rval_sheet_target(),
+                      name_var = input$select_input_samplenamevar,
+                      grouping_var = input$select_input_groupingvar,
+                      donor_var = input$select_input_donorvar,
+                      normalization_mode = input$select_minfi_norm,
+                      dropsnps = input$select_minfi_dropsnps,
+                      dropcphs = input$select_minfi_dropcphs,
+                      dropsex = input$select_minfi_chromosomes,
+                      maf = input$slider_minfi_maf,
+                      probes = rval_gsetprobes(),
+                      limma_voi = input$select_limma_voi,
+                      limma_covar = input$checkbox_limma_covariables,
+                      limma_inter = input$checkbox_limma_interactions,
+                      limma_arrayweights = input$select_limma_weights,
+                      limma_ebayes_trend = input$select_limma_trend,
+                      limma_ebayes_robust = input$select_limma_robust,
+                      rval_design = rval_design(),
+                      rval_contrasts = rval_contrasts(),
+                      rval_voi = rval_voi(),
+                      rval_dendrogram = rval_dendrogram(),
+                      min_deltabeta = input$slider_limma_deltab,
+                      max_fdr = input$slider_limma_adjpvalue,
+                      max_pvalue = input$slider_limma_pvalue,
+                      clusteralg = input$select_limma_clusteralg,
+                      groups2plot = input$select_limma_groups2plot,
+                      contrasts2plot = input$select_limma_contrasts2plot,
+                      Colv = input$select_limma_colv,
+                      distance = input$select_limma_clusterdist,
+                      scale = input$select_limma_scale,
+                      removebatch = input$select_limma_removebatch,
+                      plot_densityplotraw = rval_plot_densityplotraw(),
+                      plot_densityplot = rval_plot_densityplot(),
+                      plot_pcaplot = rval_plot_pca()[["graph"]],
+                      plot_corrplot = rval_plot_corrplot()[["graph"]],
+                      plot_boxplotraw = rval_plot_boxplotraw(),
+                      plot_boxplot = rval_plot_boxplot(),
+                      plot_qcraw = rval_plot_qcraw(),
+                      plot_bisulfiterawII = rval_plot_bisulfiterawII(),
+                      plot_sexprediction = rval_plot_sexprediction(),
+                      plot_snpheatmap = rval_plot_snpheatmap(),
+                      plot_plotSA = rval_plot_plotSA(),
+                      table_pcaplot = rval_plot_pca()[["info"]],
+                      table_corrplot = rval_plot_corrplot()[["info"]],
+                      data_sexprediction = as.data.frame(minfi::pData(rval_gset()))[["predictedSex"]],
+                      table_dmps = make_table(),
+                      filteredlist2heatmap = rval_filteredlist2heatmap()
+                  )
+                  
+                  # if DMR analysis has been done, we add specific parameters
+                  if (rval_dmrs_finished()) {
+                      params[["dmrs_contrasts"]] <- input$select_dmrs_contrasts
+                      params[["dmrs_rval_dendrogram"]] <- rval_dendrogram_dmrs()
+                      params[["dmrs_min_deltabeta"]] <- input$slider_dmrs_deltab
+                      params[["dmrs_max_fdr"]] <- input$slider_dmrs_adjpvalue
+                      params[["dmrs_max_pvalue"]] <- input$slider_dmrs_pvalue
+                      params[["dmrs_clusteralg"]] <- input$select_dmrs_clusteralg
+                      params[["dmrs_groups2plot"]] <- input$select_dmrs_groups2plot
+                      params[["dmrs_contrasts2plot"]] <- input$select_dmrs_contrasts2plot
+                      params[["dmrs_regions2plot"]] <- input$select_dmrs_regions2plot
+                      params[["dmrs_Colv"]] <- input$select_dmrs_colv
+                      params[["dmrs_distance"]] <- input$select_dmrs_clusterdist
+                      params[["dmrs_scale"]] <- input$select_dmrs_scale
+                      params[["dmrs_removebatch"]] <- input$select_dmrs_removebatch
+                      params[["table_dmrs"]] <- make_table_dmrscount()
+                      params[["filteredmcsea2heatmap"]] <- rval_filteredmcsea2heatmap()
+                  }
+                  
+                  newenv <- new.env(parent = globalenv())
+                  newenv$create_heatmap <- create_heatmap
+                  
+                  render_file <- rmarkdown::render(
+                      input = system.file("report.Rmd", package = "shinyepico"),
+                      output_file = file,
+                      run_pandoc = TRUE,
+                      params = params,
+                      envir = newenv
+                  )
+                  
+                  shinyjs::enable("download_export_markdown")
+              }
+          )
+      }
+  )
+  
+  # script generation
+  output$download_export_script <- downloadHandler(
+      filename = "shinyepico_script.R",
+      content = function(file) {
+          shinyjs::disable("download_export_script")
+          withProgress(
+              message = "Generating Script...",
+              value = 1,
+              max = 3,
+              {
+                  fileConn <- file(file)
+                  writeLines(
+                      c(
+                          paste("#This script was generated with shiny\u00C9PICo", utils::packageVersion("shinyepico"), "on", Sys.Date()),
+                          "library(shiny)",
+                          "library(data.table)",
+                          "library(rlang)",
+                          paste("########################", "PARAMETERS", "########################"),
+                          "path <- \"insert here the path to the decompress folder with iDATs and the sample_sheet in .csv\"",
+                          paste("norm_options <-", rlang::expr_text(norm_options)),
+                          "#Performance",
+                          paste("cores <-", n_cores),
+                          "#Data reading",
+                          paste("sample_name_var <-", rlang::expr_text(input$select_input_samplenamevar)),
+                          paste("selected_samples <-", rlang::expr_text(input$selected_samples)),
+                          paste("donorvar <-", rlang::expr_text(input$select_input_donorvar)),
+                          paste("detectP <-", 0.01),
+                          "#Normalization",
+                          paste("normalization_mode <-", rlang::expr_text(input$select_minfi_norm)),
+                          paste("dropSNPs <-", rlang::expr_text(input$select_minfi_dropsnps)),
+                          paste("maf <-", rlang::expr_text(input$slider_minfi_maf)),
+                          paste("dropCpHs <-", rlang::expr_text(input$select_minfi_dropcphs)),
+                          paste("dropSex <-", rlang::expr_text(input$select_minfi_chromosomes)),
+                          "#Linear model and contrasts",
+                          paste("voi_var <-", rlang::expr_text(input$select_limma_voi)),
+                          paste("covariables <-", rlang::expr_text(input$checkbox_limma_covariables)),
+                          paste("interactions <-", rlang::expr_text(input$checkbox_limma_interactions)),
+                          paste("weighting <-", rlang::expr_text(input$select_limma_weights)),
+                          paste("trend <-", rlang::expr_text(input$select_limma_trend)),
+                          paste("robust <-", rlang::expr_text(input$select_limma_robust)),
+                          "#DMP filtering",
+                          paste("deltaB <-", rlang::expr_text(input$slider_limma_deltab)),
+                          paste("adjp_max <-", rlang::expr_text(input$slider_limma_adjpvalue)),
+                          paste("p.value <-", rlang::expr_text(input$slider_limma_pvalue)),
+                          "#DMP Heatmap",
+                          paste("removebatch <-", rlang::expr_text(input$select_limma_removebatch)),
+                          paste("contrasts2plot <-", rlang::expr_text(input$select_limma_contrasts2plot)),
+                          paste("groups2plot <-", rlang::expr_text(input$select_limma_groups2plot)),
+                          paste("colv <-", rlang::expr_text(input$select_limma_colv)),
+                          paste("colsidecolors <-", rlang::expr_text(input$select_limma_colsidecolors)),
+                          paste("clusteralg <-", rlang::expr_text(input$select_limma_clusteralg)),
+                          paste("distance <-", rlang::expr_text(input$select_limma_clusterdist)),
+                          paste("scale <-", rlang::expr_text(input$select_limma_scale)),
+                          paste("rowsidecolors <-", rlang::expr_text(input$select_limma_rowsidecolors)),
+                          paste("k_number <-", rlang::expr_text(input$select_limma_knumber)),
+                          "#DMR calculation",
+                          paste("mincpgs_dmrs <-", rlang::expr_text(input$slider_dmrs_cpgs)),
+                          paste("platform <-", rlang::expr_text(input$select_dmrs_platform)),
+                          paste("permutations_dmrs <-", rlang::expr_text(input$slider_dmrs_permutations)),
+                          paste("regions_dmrs <-", rlang::expr_text(input$select_dmrs_regions)),
+                          paste("contrasts_dmrs <-", rlang::expr_text(input$select_dmrs_contrasts)),
+                          "#DMR filtering",
+                          paste("fdr_dmrs <-", rlang::expr_text(input$slider_dmrs_adjpvalue)),
+                          paste("pval_dmrs <-", rlang::expr_text(input$slider_dmrs_pvalue)),
+                          paste("dif_beta_dmrs <-", rlang::expr_text(input$slider_dmrs_deltab)),
+                          "#DMR heatmap",
+                          paste("dmrs_removebatch <-", rlang::expr_text(input$select_dmrs_removebatch)),
+                          paste("dmrs_contrasts2plot <-", rlang::expr_text(input$select_dmrs_contrasts2plot)),
+                          paste("dmrs_groups2plot <-", rlang::expr_text(input$select_dmrs_groups2plot)),
+                          paste("dmrs_regions2plot <-", rlang::expr_text(input$select_dmrs_regions2plot)),
+                          paste("dmrs_colv <-", rlang::expr_text(input$select_dmrs_colv)),
+                          paste("dmrs_colsidecolors <-", rlang::expr_text(input$select_dmrs_colsidecolors)),
+                          paste("dmrs_clusteralg <-", rlang::expr_text(input$select_dmrs_clusteralg)),
+                          paste("dmrs_distance <-", rlang::expr_text(input$select_dmrs_clusterdist)),
+                          paste("dmrs_scale <-", rlang::expr_text(input$select_dmrs_scale)),
+                          paste("dmrs_rowsidecolors <-", rlang::expr_text(input$select_dmrs_rowsidecolors)),
+                          paste("dmrs_k_number <-", rlang::expr_text(input$select_dmrs_knumber)),
+                          paste("\n\n\n########################", "FUNCTIONS", "########################"),
+                          paste("read_idats <-", rlang::expr_text(read_idats)),
+                          paste("normalize_rgset <-", rlang::expr_text(normalize_rgset)),
+                          paste("generate_clean_samplesheet <-", rlang::expr_text(generate_clean_samplesheet)),
+                          paste("generate_contrasts <-", rlang::expr_text(generate_contrasts)),
+                          paste("generate_design <-", rlang::expr_text(generate_design)),
+                          paste("generate_limma_fit <-", rlang::expr_text(generate_limma_fit)),
+                          paste("calculate_global_difs <-", rlang::expr_text(calculate_global_difs)),
+                          paste("find_dif_cpgs <-", rlang::expr_text(find_dif_cpgs)),
+                          paste("create_filtered_list <-", rlang::expr_text(create_filtered_list)),
+                          paste("find_dmrs <-", rlang::expr_text(find_dmrs)),
+                          paste("add_dmrs_globaldifs <-", rlang::expr_text(add_dmrs_globaldifs)),
+                          paste("filter_dmrs <-", rlang::expr_text(filter_dmrs)),
+                          paste("create_dmps_heatdata <-", rlang::expr_text(create_dmps_heatdata)),
+                          paste("create_dmrs_heatdata <-", rlang::expr_text(create_dmrs_heatdata)),
+                          paste("create_dendrogram <-", rlang::expr_text(create_dendrogram)),
+                          paste("create_heatmap <-", rlang::expr_text(create_heatmap)),
+                          paste("\n\n\n########################", "PIPELINE", "########################"),
+                          "#Data reading",
+                          "sheet <- minfi::read.metharray.sheet(path)",
+                          "sheet_target <- sheet[sheet[[sample_name_var]] %in% selected_samples,]",
+                          "voi <- factor(make.names(sheet_target[[voi_var]]))",
+                          "rgset <- read_idats(sheet_target)\n",
+                          "#Normalization",
+                          "gset <- normalize_rgset(rgset, normalization_mode, detectP, dropSNPs, maf, dropCpHs, dropSex)",
+                          "clean_sheet_target <- generate_clean_samplesheet(minfi::pData(gset), donorvar)\n",
+                          "#Limma model",
+                          "design <- generate_design(voi_var, sample_name_var, covariables, interactions, clean_sheet_target)",
+                          "contrasts <- generate_contrasts(voi)",
+                          "Mvalues <- minfi::getM(gset)",
+                          "Bvalues <- as.data.frame(minfi::getBeta(gset))",
+                          "colnames(Bvalues) <- sheet_target[[sample_name_var]]",
+                          "fit <- generate_limma_fit(Mvalues, design, weighting)\n",
+                          "#DMPs calculation",
+                          "global_difs <- calculate_global_difs(Bvalues, voi, contrasts, cores)",
+                          "ebayes_tables <- find_dif_cpgs(design, fit, contrasts, trend, robust, cores)",
+                          "filtered_list <- create_filtered_list(ebayes_tables, global_difs, deltaB, adjp_max, p.value, cores)\n",
+                          "#DMPs heatmap",
+                          "dmps_heatdata <- create_dmps_heatdata(filtered_list, contrasts2plot, removebatch, design, voi, Bvalues)",
+                          "if(rowsidecolors) {dendrogram <- create_dendrogram(
+                       plot_data = dmps_heatdata, 
+                       factorgroups = factor(voi[voi %in% groups2plot], levels = groups2plot),
+                       groups2plot = voi %in% groups2plot,
+                       clusteralg = clusteralg,
+                       distance = distance,
+                       scale_selection = scale,
+                       k_number = k_number)} else{
+                       dendrogram <- NULL
+                       }",
+                          "create_heatmap(
+                       plot_data = dmps_heatdata, 
+                       factorgroups = factor(voi[voi %in% groups2plot], levels = groups2plot),
+                       groups2plot = voi %in% groups2plot,
+                       Colv = colv,
+                       ColSideColors = colsidecolors,
+                       RowSideColors = dendrogram,
+                       clusteralg = clusteralg,
+                       distance = distance,
+                       scale = scale,
+                       static = TRUE
+                       )\n",
+                          "#DMRs calculation",
+                          "mcsea_list <- find_dmrs(ebayes_tables, mincpgs_dmrs, platform, voi, regions_dmrs, contrasts_dmrs, Bvalues, permutations_dmrs, cores)",
+                          "mcsea_list <- add_dmrs_globaldifs(mcsea_list, global_difs, regions_dmrs)",
+                          "mcsea_filtered <- filter_dmrs(mcsea_list, fdr_dmrs,pval_dmrs,dif_beta_dmrs,regions_dmrs,contrasts_dmrs)\n",
+                          "#DMRs heatmap",
+                          "dmrs_heatdata <- create_dmrs_heatdata(mcsea_filtered, Bvalues, dmrs_regions2plot, dmrs_contrasts2plot, dmrs_removebatch, design, voi)",
+                          "if(dmrs_rowsidecolors) {dmrs_dendrogram <- create_dendrogram(
+                       plot_data = dmrs_heatdata, 
+                       factorgroups = factor(voi[voi %in% dmrs_groups2plot], levels = dmrs_groups2plot),
+                       groups2plot = voi %in% dmrs_groups2plot,
+                       clusteralg = dmrs_clusteralg,
+                       distance = dmrs_distance,
+                       scale_selection = dmrs_scale,
+                       k_number = dmrs_k_number)} else{
+                       dmrs_dendrogram <- NULL
+                       }",
+                          "create_heatmap(
+                       plot_data = dmrs_heatdata, 
+                       factorgroups = factor(voi[voi %in% dmrs_groups2plot], levels = dmrs_groups2plot),
+                       groups2plot = voi %in% dmrs_groups2plot,
+                       Colv = dmrs_colv,
+                       ColSideColors = dmrs_colsidecolors,
+                       RowSideColors = dmrs_dendrogram,
+                       clusteralg = dmrs_clusteralg,
+                       distance = dmrs_distance,
+                       scale = dmrs_scale,
+                       static = TRUE
+                       )"
+                      ),
+                      fileConn
+                  )
+                  close(fileConn)
+                  
+                  shinyjs::enable("download_export_script")
+              }
+          )
+      }
+  )
+  
+  # custom heatmap
+  output$download_export_heatmaps <- downloadHandler(
+      "Custom_heatmap.pdf",
+      content = function(file) {
+          shinyjs::disable("download_export_heatmaps")
+          withProgress(
+              message = "Generating plot...",
+              value = 1,
+              max = 4,
+              {
+                  grDevices::pdf(
+                      file = file,
+                      height = 11.71,
+                      width = 8.6
+                  )
+                  if (input$select_export_heatmaptype == "DMPs") {
+                      create_heatmap(
+                          rval_filteredlist2heatmap(),
+                          factorgroups = factor(rval_voi()[rval_voi() %in% input$select_limma_groups2plot],
+                                                levels = input$select_limma_groups2plot
+                          ),
+                          groups2plot = rval_voi() %in% input$select_limma_groups2plot,
+                          Colv = as.logical(input$select_limma_colv),
+                          ColSideColors = as.logical(input$select_limma_colsidecolors),
+                          RowSideColors = rval_dendrogram(),
+                          clusteralg = input$select_limma_clusteralg,
+                          distance = input$select_limma_clusterdist,
+                          scale = input$select_limma_scale,
+                          static = TRUE
+                      )
+                  }
+                  else {
+                      create_heatmap(
+                          rval_filteredmcsea2heatmap(),
+                          factorgroups = factor(rval_voi()[rval_voi() %in% input$select_dmrs_groups2plot],
+                                                levels = input$select_dmrs_groups2plot
+                          ),
+                          groups2plot = rval_voi() %in% input$select_dmrs_groups2plot,
+                          Colv = as.logical(input$select_dmrs_colv),
+                          ColSideColors = as.logical(input$select_dmrs_colsidecolors),
+                          RowSideColors = rval_dendrogram_dmrs(),
+                          clusteralg = input$select_dmrs_clusteralg,
+                          distance = input$select_dmrs_clusterdist,
+                          scale = input$select_dmrs_scale,
+                          static = TRUE
+                      )
+                  }
+                  
+                  grDevices::dev.off()
+                  shinyjs::enable("download_export_heatmaps")
+              }
+          )
+      }
+  )
+  
 })

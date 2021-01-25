@@ -45,10 +45,11 @@ shinyUI(dashboardPage(
     # MENU
     sidebarMenu(
       id = "menu",
-      menuItem("Input", tabName = "input", icon = icon("table")), # input
+      menuItem("Input", tabName = "input", icon = icon("file-upload")), # input
       menuItem("Normalization", tabName = "normalization", icon = icon("bar-chart-o")),
       menuItem("DMPS", tabName = "dmps", icon = icon("signal")),
-      menuItem("DMRS", tabName = "dmrs", icon = icon("signal"))
+      menuItem("DMRS", tabName = "dmrs", icon = icon("signal")),
+      menuItem("Export", tabName = "export", icon = icon("file-download"))
     ) # plot
   ),
 
@@ -348,7 +349,7 @@ shinyUI(dashboardPage(
                           labelWidth = "100px",
                           value = FALSE,
                           disabled = TRUE
-                        ),
+                        )
                       ),
 
                       column(
@@ -580,7 +581,7 @@ shinyUI(dashboardPage(
                           labelWidth = "100px",
                           value = FALSE,
                           disabled = TRUE
-                        ),
+                        )
                       ),
 
                       column(
@@ -718,7 +719,126 @@ shinyUI(dashboardPage(
             )
           )
         )
+      ),
+      
+      #EXPORT
+      tabItem(
+          tabName = "export",
+          fluidPage(
+              shinyjs::useShinyjs(),
+              h3("Download RObjects"),
+              pickerInput(
+                  inputId = "select_export_objects2download",
+                  label = "Selected objects",
+                  choices = c("RGSet", "GenomicRatioSet", "fit", "design", "ebayestables", "Bvalues", "Mvalues", "global_difs", "dmr_results"),
+                  selected = c("RGSet", "GenomicRatioSet", "fit", "design", "ebayestables", "Bvalues", "Mvalues", "global_difs"),
+                  options = list(
+                      `actions-box` = TRUE,
+                      size = 10,
+                      `selected-text-format` = "count > 3"
+                  ),
+                  multiple = TRUE
+              ),
+              downloadButton("download_export_robjects"),
+              p(
+                  "Press to download the R objects used for the analysis (RGSet, GenomicRatioSet, Bvalues, Mvalues, etc.)"
+              ),
+              h3("Download filtered bed files"),
+              
+              fluidPage(
+                  div(
+                      style = "display:inline-block",
+                      selectInput(
+                          "select_export_analysistype",
+                          "Analysis type",
+                          c("DMPs", "DMRs"),
+                          selected = "by contrast"
+                      )
+                  ),
+                  div(
+                      style = "display:inline-block",
+                      selectInput(
+                          "select_export_bedtype",
+                          "Subsetting mode",
+                          c("by contrasts", "by heatmap cluster"),
+                          selected = "by contrasts"
+                      )
+                  ),
+                  div(
+                      style = "display:inline-block",
+                      selectInput(
+                          "select_export_genometype",
+                          "Genome version",
+                          c("hg19", "hg38"),
+                          selected = "hg19"
+                      )
+                  )
+              ),
+              
+              
+              downloadButton("download_export_filteredbeds"),
+              p(
+                  "Press to download the created filtered lists of contrasts, or heatmap clusters,
+        with the chosen criteria, in BED format."
+              ),
+              h3("Download Workflow Report"),
+              downloadButton("download_export_markdown"),
+              p(
+                  "Press to download the report of all the steps follow and selected in the pipeline, and the results."
+              ),
+              h3("Download Custom R Script"),
+              downloadButton("download_export_script"),
+              p(
+                  "Press to download an R script with the main parameters and steps follow in the DMP/DMR pipeline, to reproduce the results later outside the shiny application."
+              ),
+              h3("Download Heatmap"),
+              selectInput(
+                  "select_export_heatmaptype",
+                  label = "Heatmap type",
+                  choices = c("DMPs", "DMRs"),
+                  selected = "DMPs"
+              ),
+              downloadButton("download_export_heatmaps"),
+              p("Press to download the custom heatmap in the gplots::heatmap.2 version.")
+          ),
+          
+          tabPanel(
+              "Help",
+              tabsetPanel(
+                  tabPanel("Credits",
+                           tags$head(tags$style(HTML(
+                               "a {color: #0275d8}"
+                           ))),
+                           img(
+                               src = "images/logo.png",
+                               width = 150
+                           ),
+                           h1("shiny\u00C9PICo"),
+                           h3(as.character(utils::packageVersion("shinyepico"))),
+                           br(),
+                           h4(
+                               tags$a(href = "https://www.gnu.org/licenses/agpl-3.0.html", "GNU Affero GPLv3 License", target = "_blank")
+                           ),
+                           h4("\u00A9 2020 Octavio Morante-Palacios"),
+                           h4(
+                               tags$a(href = "mailto:omorante@carrerasresearch.org?\u00C9PICo!", "omorante@carrerasresearch.org", target = "_blank")
+                           ),
+                           p(
+                               "shiny\u00C9PICo is a graphical interface based on Shiny. It is intended for importing and normalizing Illumina DNA methylation arrays (450k or EPIC), exploring DNA methylation data and also for following a statistical analysis to
+        detect differentially methylated CpGs and differentially methylated regions, and plotting them in useful and customable heatmaps."
+                           ),
+                           p(
+                               "For suggestions or bug reports, please use the",
+                               tags$a(href = "https://github.com/omorante/shinyepico/issues", "GitHub", target = "_blank"),
+                               "issues forum."
+                           )
+                  ),
+                  
+                  tabPanel("Manual",
+                           tags$iframe(style="height:900px; scrolling=yes; border=0; width:100%", src="https://omorante.github.io/shinyepico/shiny_epico.pdf")
+                  )
+          )
       )
     )
   )
-))
+)))
