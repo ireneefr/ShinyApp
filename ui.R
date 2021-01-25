@@ -49,7 +49,8 @@ shinyUI(dashboardPage(
       menuItem("Normalization", tabName = "normalization", icon = icon("bar-chart-o")),
       menuItem("DMPS", tabName = "dmps", icon = icon("signal")),
       menuItem("DMRS", tabName = "dmrs", icon = icon("signal")),
-      menuItem("Export", tabName = "export", icon = icon("file-download"))
+      menuItem("Export", tabName = "export", icon = icon("file-download")),
+      menuItem("Help", tabName = "help", icon = icon("question-circle"))
     ) # plot
   ),
 
@@ -800,8 +801,10 @@ shinyUI(dashboardPage(
               ),
               downloadButton("download_export_heatmaps"),
               p("Press to download the custom heatmap in the gplots::heatmap.2 version.")
-          ),
+          )),
           
+      tabItem(
+          tabName = "help",
           tabPanel(
               "Help",
               tabsetPanel(
@@ -835,10 +838,10 @@ shinyUI(dashboardPage(
                   ),
                   
                   tabPanel("Manual",
-                           tags$iframe(style="height:900px; scrolling=yes; border=0; width:100%", src="https://omorante.github.io/shinyepico/shiny_epico.pdf")
+                           #tags$iframe(style="height:900px; scrolling=yes; border=0; width:100%", src="https://omorante.github.io/shinyepico/shiny_epico.pdf")
                   )
           )
-      )
+      ))
     )
   )
-)))
+))
