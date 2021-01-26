@@ -8,7 +8,12 @@
 #
 library(shiny)
 library(dplyr)
+library(minfi)
+library(reshape2) #melt in control type
+library(ggplot2) #ggplot in control type
 
+source("run-methylation.R")
+#source("shinyMethylSet.R")
 source("utils_analysis.R")
 source("utils_graphs.R")
 source("utils_download.R")
@@ -18,7 +23,7 @@ shinyServer(function(input, output, session) {
   n_cores <- getShinyOption("n_cores")
 
   # Max size
-  options(shiny.maxRequestSize = 100 * 1024^2) # 5MB getShinyOption("shiny.maxRequestSize") | 30*1024^2 = 30MB
+  options(shiny.maxRequestSize = 200 * 1024^2) # 5MB getShinyOption("shiny.maxRequestSize") | 30*1024^2 = 30MB
 
   # INITIALIZE REACTIVE VARIABLES
   rval_generated_limma_model <- reactiveVal(value = FALSE)
@@ -281,7 +286,30 @@ shinyServer(function(input, output, session) {
     )
   })
 
-
+##################################################################################################
+  
+  
+  # READ RGSET
+#  rgSet <- reactive({
+#    rgSet <- read.metharray.exp(targets=rval_sheet(), force = TRUE)
+    # Define the sample names into the rgSet
+#    sampleNames(rgSet) <- paste(rval_sheet()$Sample_Group,rval_sheet()$Sample_Name,sep=".")
+#    rgSet
+#  })
+  
+#  output$loaded_rgSet <- renderText({
+#    if (!is.null(rgSet())){
+#      "- The rgSet has been created correctly."
+#    }
+#  })
+  
+  
+  # CREATE SHINY METHYL OBJECT
+  shinyMethylSet1 <- reactive({
+    summary <- shinySummarizepr(rval_rgset())
+  })
+  
+####################################################################################################
 
 
 
@@ -323,7 +351,106 @@ shinyServer(function(input, output, session) {
     updateTabsetPanel(session, "menu", "normalization")
   })
 
-
+##################################################################################
+  output$controlID <- renderUI({
+    greenControls   <-  getGreenControls(shinyMethylSet1())
+    controlNames    <-  names(greenControls)
+    selectInput("controlType", "Choose a control type:",
+                choices = controlNames)
+  })
+  
+  output$array <- renderUI({
+    arrayNames      <- shinyMethylSet1()@phenotype$Array
+    selectInput("arrayID", "Select array:", arrayNames)
+  })
+  
+  
+  ## CONTROL TYPE PLOTS
+  output$controlTypePlotGreen <- renderPlot({
+    if (!is.null(input$controlType)){
+      
+      cnt <- input$controlType
+      
+      
+      groupNames      <- shinyMethylSet1()@phenotype$Sample_Group
+      
+      
+      sampleNames     <-  rval_sheet()$Samples_Name #sampleNames(shinyMethylSet1())
+      
+        
+      greenControls   <-  getGreenControls(shinyMethylSet1())
+      
+      
+      
+      if (input$controlType %in% c("BISULFITE CONVERSION I", "BISULFITE CONVERSION II", "HYBRIDIZATION", "SPECIFICITY I",
+                                   "SPECIFICITY II", "TARGET REMOVAL")){
+        threshold <- 1
+      } else if (input$controlType %in% c("EXTENSION", "STAINING", "NON-POLYMORPHIC")){
+        threshold <- 5 # you can increase the threshold
+        
+      } else {threshold <- 0}
+      
+      if (length(sampleNames) >= 50){
+        arr <- input$arrayID
+        column_names <- colnames(greenControls[[cnt]])
+        idx_col <- grep(arr, column_names)
+        subset <- greenControls[[cnt]][, idx_col]
+        title <- paste("-", arr)
+        # array_names <- substr(colnames(subset), nchar(slideNames[1]) + 2, nchar(slideNames[1]) + 7)
+        # colnames(subset) <- array_names
+      }  else {
+        subset <- greenControls[[cnt]]
+        title <- ""
+      }
+      print("Plot")
+      log2_subset_GC <- log2(subset)
+      df_subset_GC <- melt(log2_subset_GC)
+      ggplot(data=as.data.frame(df_subset_GC), aes(x=Var2, y=value)) +
+        geom_point(color="darkgreen", size=1.5) + scale_y_continuous(limits = c(-1, 20)) +
+        theme(axis.text.x = element_text(hjust = 1, angle=45)) +
+        geom_hline(yintercept =threshold, linetype="dashed") + ylab("Log2 Intensity") +
+        scale_x_discrete(labels=groupNames) + xlab("Samples") + ggtitle(paste("Green Channel", title))
+    }
+  }
+  )
+  
+  output$controlTypePlotRed <- renderPlot({
+    if (!is.null(input$controlType)){
+      cnt <- input$controlType
+      groupNames      <- shinyMethylSet1()@phenotype$Sample_Group
+      sampleNames     <-  rval_sheet()$Samples_Name #sampleNames(shinyMethylSet1())
+      redControls     <-  getRedControls(shinyMethylSet1())
+      
+      if (input$controlType %in% c("BISULFITE CONVERSION I", "BISULFITE CONVERSION II", "HYBRIDIZATION", "SPECIFICITY I",
+                                   "SPECIFICITY II", "TARGET REMOVAL")){
+        threshold <- 1
+      } else if (input$controlType %in% c("EXTENSION", "STAINING", "NON-POLYMORPHIC")){
+        threshold <- 5 # you can increase the threshold
+      } else {threshold <- 0}
+      
+      if (length(sampleNames) >= 50){
+        arr <- input$arrayID
+        column_names <- colnames(redControls[[cnt]])
+        idx_col <- grep(arr, column_names)
+        subset <- redControls[[cnt]][, idx_col]
+        title <- paste("-", arr)
+        # array_names <- substr(colnames(subset), nchar(slideNames[1]) + 2, nchar(slideNames[1]) + 7)
+        # colnames(subset) <- array_names
+      }  else {
+        subset <- redControls[[cnt]]
+        title <- ""
+      }
+      
+      log2_subset_GC <- log2(subset)
+      df_subset_GC <- melt(log2_subset_GC)
+      ggplot(data=as.data.frame(df_subset_GC), aes(x=Var2, y=value)) +
+        geom_point(color="red", size=1.5) + scale_y_continuous(limits = c(-1, 20)) +
+        theme(axis.text.x = element_text(hjust = 1, angle=45)) +
+        geom_hline(yintercept =threshold, linetype="dashed") + ylab("Log2 Intensity") +
+        scale_x_discrete(labels=groupNames) + xlab("Samples") + ggtitle(paste("Red Channel", title))
+    } }
+  )
+##################################################################################
 
 
 
@@ -352,7 +479,6 @@ shinyServer(function(input, output, session) {
         })
 
         # check if normalization has worked
-
         if (!exists("gset", inherits = FALSE)) {
           showModal(
             modalDialog(
@@ -382,12 +508,10 @@ shinyServer(function(input, output, session) {
   })
 
   # filtered probes info
-
   rval_gsetprobes <- eventReactive(input$button_minfi_select, {
     req(rval_gset())
     length(minfi::featureNames(rval_gset()))
   })
-
   output$text_minfi_probes <- renderText(paste(rval_gsetprobes(), "positions after normalization"))
 
   # getBeta/getM reactives
@@ -408,11 +532,13 @@ shinyServer(function(input, output, session) {
     colnames(mvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
     mvalues
   })
+  
   ##############
 
   # Minfi Graphics
 
   # Density plots
+
   rval_plot_densityplotraw <- reactive(create_densityplot(rval_rgset_getBeta(), 200000))
   rval_plot_densityplot <- reactive(create_densityplot(rval_gset_getBeta(), 200000))
 

@@ -1,8 +1,4 @@
 
-# Upload app to shinyapps.io
-# library(rsconnect)
-# deployApp("/mnt/ElRaid/ifernandez/R/shinyepico_input")
-
 # AVAILABLE METHODS
 norm_options <- c(
   "Raw",
@@ -164,6 +160,21 @@ shinyUI(dashboardPage(
           mainPanel(
             width = 9,
             tabsetPanel(
+              
+###################################################################################
+
+              tabPanel(
+                "Control Type",
+                uiOutput("controlID"),
+                #selectInput("controlType", "Choose a control type:",
+                #    choices = controlNames),
+                uiOutput("array"),
+                  withSpinner(plotOutput("controlTypePlotGreen")),
+                  withSpinner(plotOutput("controlTypePlotRed"))
+              ),
+
+###################################################################################
+
               tabPanel(
                 "Quality Control",
                 h4("Overall Signal"),
@@ -174,6 +185,9 @@ shinyUI(dashboardPage(
 
               tabPanel(
                 "Density plot",
+                selectInput("probeType", "Choose a probe type for the density curves:",
+                            choices = c("I Green","I Red","II","X","Y"),
+                            selected="I Green"),
                 h4("Raw"),
                 withSpinner(plotly::plotlyOutput("graph_minfi_densityplotraw")),
                 h4("Processed"),
@@ -391,14 +405,14 @@ shinyUI(dashboardPage(
                           "pearson"
                         ),
 
-                        selectInput("select_limma_scale", "Scale", c("row", "none"), "row"),
-                        tags$br()
+                        selectInput("select_limma_scale", "Scale", c("row", "none"), "row")
+                        #tags$br()
                       ),
 
                       column(
                         3,
                         offset = 1,
-                        tags$br(),
+                        #tags$br(),
 
                         switchInput(
                           inputId = "select_limma_graphstatic",
@@ -425,7 +439,7 @@ shinyUI(dashboardPage(
                       column(
                         3,
 
-                        tags$br(),
+                        #tags$br(),
 
                         switchInput(
                           inputId = "select_limma_rowsidecolors",
@@ -623,14 +637,14 @@ shinyUI(dashboardPage(
                           "pearson"
                         ),
 
-                        selectInput("select_dmrs_scale", "Scale", c("row", "none"), "row"),
-                        tags$br()
+                        selectInput("select_dmrs_scale", "Scale", c("row", "none"), "row")#,
+                        #tags$br()
                       ),
 
                       column(
                         3,
                         offset = 1,
-                        tags$br(),
+                        #tags$br(),
 
                         switchInput(
                           inputId = "select_dmrs_graphstatic",
@@ -657,7 +671,7 @@ shinyUI(dashboardPage(
                       column(
                         3,
 
-                        tags$br(),
+                        #tags$br(),
 
                         switchInput(
                           inputId = "select_dmrs_rowsidecolors",
@@ -695,19 +709,19 @@ shinyUI(dashboardPage(
                 h4("DMRs table"),
 
 
-                div(
+               div(
                   style = "display:inline-block",
 
                   selectInput(
                     "select_dmrs_selcont",
                     label = "Contrast",
                     choices = c()
-                  )
+                  ),
                 ),
 
                 div(
                   style = "display:inline-block",
-                  selectInput("select_dmrs_selreg", label = "Region", choices = c())
+                  selectInput("select_dmrs_selreg", label = "Region", choices = c()),
                 ),
 
 
