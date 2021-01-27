@@ -80,7 +80,7 @@ shinyUI(dashboardPage(
               width = 3,
               selectInput("select_input_samplenamevar", "", c()),
               selectInput("select_input_groupingvar", "", c()),
-              selectInput("select_input_donorvar", "", c()),
+              selectInput("select_input_donorvar", "", c(), multiple = TRUE),
               pickerInput(
                 inputId = "selected_samples",
                 label = "",

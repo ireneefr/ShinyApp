@@ -23,7 +23,7 @@ shinyServer(function(input, output, session) {
   n_cores <- getShinyOption("n_cores")
 
   # Max size
-  options(shiny.maxRequestSize = 200 * 1024^2) # 5MB getShinyOption("shiny.maxRequestSize") | 30*1024^2 = 30MB
+  options(shiny.maxRequestSize = 8000 * 1024^2) # 5MB getShinyOption("shiny.maxRequestSize") | 30*1024^2 = 30MB
 
   # INITIALIZE REACTIVE VARIABLES
   rval_generated_limma_model <- reactiveVal(value = FALSE)
@@ -135,11 +135,12 @@ shinyServer(function(input, output, session) {
       label = "Select Variable of Interest:",
       choices = colnames(rval_sheet())
     )
+    
     updateSelectInput(
       session,
       "select_input_donorvar",
       label = "Select Donor Variable:",
-      choices = colnames(rval_sheet())
+      choices = c(" ", colnames(rval_sheet()))
     )
 
     shinyjs::enable("button_input_next") # Enable button continue
@@ -164,7 +165,10 @@ shinyServer(function(input, output, session) {
   # when samples selected are changed, continue button is enabled again
   observeEvent(input$selected_samples, shinyjs::enable("button_input_next"))
 
-
+  
+  print(rval_sheet_target)
+  print("rval_sheet_target")
+  
 
 
   # rval_rgset loads RGSet using read.metharray.exp and the sample sheet (rval_sheet())
@@ -286,16 +290,20 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  
 ##################################################################################################
   
   
   # READ RGSET
-#  rgSet <- reactive({
-#    rgSet <- read.metharray.exp(targets=rval_sheet(), force = TRUE)
+  rgSet <- reactive({
+    rgSet <- read.metharray.exp(targets=rval_sheet(), force = TRUE)
     # Define the sample names into the rgSet
-#    sampleNames(rgSet) <- paste(rval_sheet()$Sample_Group,rval_sheet()$Sample_Name,sep=".")
-#    rgSet
-#  })
+    sampleNames(rgSet) <- paste(rval_sheet()$Sample_Group,rval_sheet()$Sample_Name,sep=".")
+    rgSet
+    print(rgSet)
+  })
+  print("out")
+  print(rgSet)
   
 #  output$loaded_rgSet <- renderText({
 #    if (!is.null(rgSet())){
@@ -358,7 +366,8 @@ shinyServer(function(input, output, session) {
     selectInput("controlType", "Choose a control type:",
                 choices = controlNames)
   })
-  
+
+    
   output$array <- renderUI({
     arrayNames      <- shinyMethylSet1()@phenotype$Array
     selectInput("arrayID", "Select array:", arrayNames)
