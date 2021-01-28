@@ -114,11 +114,11 @@ shinyServer(function(input, output, session) {
   output$prueba2 <- renderPrint({rval_sheet_target()})
 
   rval_clean_sheet_target <- eventReactive(rval_gset(), {
-    #generate_clean_samplesheet(
-    #  target_samplesheet = minfi::pData(rval_gset()),
-    #  donorvar = input$select_input_donorvar
-    #)
-    minfi::pData(rval_rgset())
+    generate_clean_samplesheet(
+      target_samplesheet = minfi::pData(rval_gset()),
+      donorvar = input$select_input_donorvar
+    )
+    #minfi::pData(rval_rgset())
   })
   output$prueba3 <- renderPrint({rval_clean_sheet_target()})
 
