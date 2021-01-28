@@ -80,7 +80,7 @@ shinyUI(dashboardPage(
               width = 3,
               selectInput("select_input_samplenamevar", "", c()),
               selectInput("select_input_groupingvar", "", c()),
-              selectInput("select_input_donorvar", "", c(), multiple = TRUE),
+              selectInput("select_input_donorvar", "", c()),
               pickerInput(
                 inputId = "selected_samples",
                 label = "",
@@ -99,7 +99,9 @@ shinyUI(dashboardPage(
           # Box 2: Table
           box(
             width = 9,
-            withSpinner(DT::DTOutput("samples_table"))
+            withSpinner(DT::DTOutput("samples_table")),
+            #verbatimTextOutput("prueba1")
+            
           )
         )
       ),
@@ -153,7 +155,8 @@ shinyUI(dashboardPage(
 
             shinyjs::disabled(actionButton("button_minfi_select", "Select")),
             h4(),
-            textOutput("text_minfi_probes")
+            textOutput("text_minfi_probes"),
+            #verbatimTextOutput("prueba2")
           ),
 
 
@@ -170,7 +173,21 @@ shinyUI(dashboardPage(
                 #    choices = controlNames),
                 uiOutput("array"),
                   withSpinner(plotOutput("controlTypePlotGreen")),
-                  withSpinner(plotOutput("controlTypePlotRed"))
+                  withSpinner(plotOutput("controlTypePlotRed")),
+                verbatimTextOutput("prueba1"),
+                verbatimTextOutput("prueba2"),
+                verbatimTextOutput("prueba3"),
+                verbatimTextOutput("prueba5"),
+                verbatimTextOutput("prueba5.1"),
+                verbatimTextOutput("prueba5.0"),
+                verbatimTextOutput("prueba5.1.0"),
+                verbatimTextOutput("prueba6"),
+                verbatimTextOutput("prueba7"),
+                verbatimTextOutput("prueba8"),
+                verbatimTextOutput("prueba9"),
+                verbatimTextOutput("prueba10"),
+                verbatimTextOutput("prueba9_10"),
+                verbatimTextOutput("prueba11")
               ),
 
 ###################################################################################

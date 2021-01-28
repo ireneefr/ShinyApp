@@ -87,6 +87,7 @@ shinyServer(function(input, output, session) {
     sheet
   })
 
+  output$prueba1 <- renderPrint({rval_sheet()})
 
   output$samples_table <- DT::renderDT(
     rval_sheet(),
@@ -110,15 +111,16 @@ shinyServer(function(input, output, session) {
     input$button_input_next,
     rval_sheet()[rval_sheet()[[input$select_input_samplenamevar]] %in% input$selected_samples, ],
   )
-
+  output$prueba2 <- renderPrint({rval_sheet_target()})
 
   rval_clean_sheet_target <- eventReactive(rval_gset(), {
-    generate_clean_samplesheet(
-      target_samplesheet = minfi::pData(rval_gset()),
-      donorvar = input$select_input_donorvar
-    )
+    #generate_clean_samplesheet(
+    #  target_samplesheet = minfi::pData(rval_gset()),
+    #  donorvar = input$select_input_donorvar
+    #)
+    minfi::pData(rval_rgset())
   })
-
+  output$prueba3 <- renderPrint({rval_clean_sheet_target()})
 
   # When you press button_input_load, the form options are updated
   observeEvent(input$button_input_load, {
@@ -146,6 +148,13 @@ shinyServer(function(input, output, session) {
     shinyjs::enable("button_input_next") # Enable button continue
   })
 
+  
+  rval_gsetprobes <- eventReactive(input$button_minfi_select, {
+    req(rval_gset())
+    length(minfi::featureNames(rval_gset()))
+  })
+  output$text_minfi_probes <- renderText(paste(rval_gsetprobes(), "positions after normalization"))
+  
   # The checkbox of samples to process is updated when samplenamevar changes
   observeEvent(
     {
@@ -290,6 +299,10 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  output$prueba5 <- renderPrint({head(minfi::getUnmeth(minfi::preprocessRaw(rval_rgset())))})
+  output$prueba5.1 <- renderPrint({head(minfi::getMeth(minfi::preprocessRaw(rval_rgset())))})
+  output$prueba5.0 <- renderPrint({minfi::getBeta(minfi::getUnmeth(minfi::preprocessRaw(rval_rgset())))})
+  output$prueba5.1.0 <- renderPrint({minfi::getBeta(minfi::getMeth(minfi::preprocessRaw(rval_rgset())))})
   
 ##################################################################################################
   
@@ -300,10 +313,9 @@ shinyServer(function(input, output, session) {
     # Define the sample names into the rgSet
     sampleNames(rgSet) <- paste(rval_sheet()$Sample_Group,rval_sheet()$Sample_Name,sep=".")
     rgSet
-    print(rgSet)
   })
-  print("out")
-  print(rgSet)
+  output$prueba6 <- renderPrint({rgSet()})
+  
   
 #  output$loaded_rgSet <- renderText({
 #    if (!is.null(rgSet())){
@@ -316,6 +328,7 @@ shinyServer(function(input, output, session) {
   shinyMethylSet1 <- reactive({
     summary <- shinySummarizepr(rval_rgset())
   })
+  output$prueba7 <- renderPrint({shinyMethylSet1()})
   
 ####################################################################################################
 
@@ -412,8 +425,15 @@ shinyServer(function(input, output, session) {
         title <- ""
       }
       print("Plot")
+      #print(subset)
+      #print(class(subset))
+      #print(class(input$arrayID))
+      #subset <- as.data.frame(subset) %>% select(contains(input$arrayID))
+      #print(subset)
       log2_subset_GC <- log2(subset)
-      df_subset_GC <- melt(log2_subset_GC)
+      #print(log2_subset_GC)
+      #df_subset_GC <- melt(as.matrix(log2_subset_GC))
+      #print(df_subset_GC)
       ggplot(data=as.data.frame(df_subset_GC), aes(x=Var2, y=value)) +
         geom_point(color="darkgreen", size=1.5) + scale_y_continuous(limits = c(-1, 20)) +
         theme(axis.text.x = element_text(hjust = 1, angle=45)) +
@@ -516,12 +536,17 @@ shinyServer(function(input, output, session) {
     )
   })
 
+  output$prueba8 <- renderPrint({rval_gset()})
+  
+  
+######### REPETITIVE CODE ?
+  
   # filtered probes info
-  rval_gsetprobes <- eventReactive(input$button_minfi_select, {
-    req(rval_gset())
-    length(minfi::featureNames(rval_gset()))
-  })
-  output$text_minfi_probes <- renderText(paste(rval_gsetprobes(), "positions after normalization"))
+#  rval_gsetprobes <- eventReactive(input$button_minfi_select, {
+#    req(rval_gset())
+#    length(minfi::featureNames(rval_gset()))
+#  })
+#  output$text_minfi_probes <- renderText(paste(rval_gsetprobes(), "positions after normalization"))
 
   # getBeta/getM reactives
   rval_rgset_getBeta <- eventReactive(rval_rgset(), {
@@ -529,18 +554,25 @@ shinyServer(function(input, output, session) {
     colnames(bvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
     bvalues
   })
-
+  output$prueba9 <- renderPrint({rval_rgset_getBeta()})
+  
+  
   rval_gset_getBeta <- eventReactive(rval_gset(), {
     bvalues <- as.data.frame(minfi::getBeta(rval_gset()))
     colnames(bvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
     bvalues
   })
-
+  output$prueba10 <- renderPrint({dim(rval_gset_getBeta())})
+  output$prueba9_10 <- renderPrint({rownames(rval_gset_getBeta()) %in% rownames(rval_rgset_getBeta())})
+  
+  
   rval_gset_getM <- reactive({
     mvalues <- minfi::getM(rval_gset())
     colnames(mvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
     mvalues
   })
+  output$prueba11 <- renderPrint({head(rval_gset_getM())})
+  
   
   ##############
 
@@ -549,8 +581,10 @@ shinyServer(function(input, output, session) {
   # Density plots
 
   rval_plot_densityplotraw <- reactive(create_densityplot(rval_rgset_getBeta(), 200000))
+  rval_plot_densityplotraw <- reactive(minfi::densityPlot(rval_rgset_getBeta(), sampGroups = pData(rval_rgset())))
+  
   rval_plot_densityplot <- reactive(create_densityplot(rval_gset_getBeta(), 200000))
-
+  
   output$graph_minfi_densityplotraw <- plotly::renderPlotly(rval_plot_densityplotraw())
   output$graph_minfi_densityplot <- plotly::renderPlotly(rval_plot_densityplot())
 
