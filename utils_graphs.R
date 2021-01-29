@@ -338,6 +338,28 @@ create_densityplot <- function(Bvalues, n = 200000) {
     plotly_config() # %>% plotly::toWebGL()
 }
 
+create_densityplot2 <- function(Bvalues, n = 200000){
+  plotly::ggplotly(
+    Bvalues[sample(seq_len(nrow(Bvalues)), n), ] %>%
+      tidyr::pivot_longer(
+        cols = seq_len(ncol(Bvalues)),
+        names_to = "sample",
+        values_to = "Bvalues"
+      ) %>%
+      ggplot2::ggplot(ggplot2::aes(
+        x = .data$Bvalues, color = .data$sample
+      )) +
+      ggplot2::stat_density(position = "identity", geom = "line") +
+      ggplot2::theme_bw() +
+      ggplot2::theme(
+        panel.grid.major = ggplot2::element_blank(),
+        panel.grid.minor = ggplot2::element_blank()
+      )
+  ) %>%
+    plotly_config() # %>% plotly::toWebGL()
+}
+
+
 create_boxplot <- function(Bvalues, n = 200000) {
   Bvalues[sample(seq_len(nrow(Bvalues)), n), ] %>%
     tidyr::pivot_longer(

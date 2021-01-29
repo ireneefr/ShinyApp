@@ -99,9 +99,8 @@ shinyUI(dashboardPage(
           # Box 2: Table
           box(
             width = 9,
-            withSpinner(DT::DTOutput("samples_table")),
-            #verbatimTextOutput("prueba1")
-            
+            withSpinner(DT::DTOutput("samples_table"))
+
           )
         )
       ),
@@ -155,8 +154,7 @@ shinyUI(dashboardPage(
 
             shinyjs::disabled(actionButton("button_minfi_select", "Select")),
             h4(),
-            textOutput("text_minfi_probes"),
-            #verbatimTextOutput("prueba2")
+            textOutput("text_minfi_probes")
           ),
 
 
@@ -173,21 +171,7 @@ shinyUI(dashboardPage(
                 #    choices = controlNames),
                 uiOutput("array"),
                   withSpinner(plotOutput("controlTypePlotGreen")),
-                  withSpinner(plotOutput("controlTypePlotRed")),
-                verbatimTextOutput("prueba1"),
-                verbatimTextOutput("prueba2"),
-                verbatimTextOutput("prueba3"),
-                verbatimTextOutput("prueba5"),
-                verbatimTextOutput("prueba5.1"),
-                verbatimTextOutput("prueba5.0"),
-                verbatimTextOutput("prueba5.1.0"),
-                verbatimTextOutput("prueba6"),
-                verbatimTextOutput("prueba7"),
-                verbatimTextOutput("prueba8"),
-                verbatimTextOutput("prueba9"),
-                verbatimTextOutput("prueba10"),
-                verbatimTextOutput("prueba9_10"),
-                verbatimTextOutput("prueba11")
+                  withSpinner(plotOutput("controlTypePlotRed"))
               ),
 
 ###################################################################################
@@ -203,8 +187,14 @@ shinyUI(dashboardPage(
               tabPanel(
                 "Density plot",
                 selectInput("probeType", "Choose a probe type for the density curves:",
-                            choices = c("I Green","I Red","II","X","Y"),
-                            selected="I Green"),
+                            choices = c("I-Green","I-Red","II"),
+                            selected="I-Green"),
+                uiOutput("prueba1"),
+                uiOutput("prueba1.1"),
+                uiOutput("prueba2"),
+                uiOutput("prueba2.1"),
+                uiOutput("prueba3"),
+                uiOutput("prueba3.1"),
                 h4("Raw"),
                 withSpinner(plotly::plotlyOutput("graph_minfi_densityplotraw")),
                 h4("Processed"),
@@ -733,12 +723,12 @@ shinyUI(dashboardPage(
                     "select_dmrs_selcont",
                     label = "Contrast",
                     choices = c()
-                  ),
+                  )
                 ),
 
                 div(
                   style = "display:inline-block",
-                  selectInput("select_dmrs_selreg", label = "Region", choices = c()),
+                  selectInput("select_dmrs_selreg", label = "Region", choices = c())
                 ),
 
 
@@ -866,11 +856,11 @@ shinyUI(dashboardPage(
                                tags$a(href = "https://github.com/omorante/shinyepico/issues", "GitHub", target = "_blank"),
                                "issues forum."
                            )
-                  ),
+                  )#,
                   
-                  tabPanel("Manual",
+                  #tabPanel("Manual",
                            #tags$iframe(style="height:900px; scrolling=yes; border=0; width:100%", src="https://omorante.github.io/shinyepico/shiny_epico.pdf")
-                  )
+                  #)
           )
       ))
     )
