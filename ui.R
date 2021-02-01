@@ -19,6 +19,19 @@ hclust_methods <- c(
   "centroid"
 )
 
+controlNames <- c(
+  "BISULFITE CONVERSION I",
+  "BISULFITE CONVERSION II",
+  "HYBRIDIZATION",
+  "SPECIFICITY I",
+  "SPECIFICITY II",
+  "TARGET REMOVAL",
+  "BISULFITE CONVERSION I",
+  "EXTENSION",
+  "STAINING",
+  "NON-POLYMORPHIC"
+  )
+
 
 # Load packages
 library(shiny)
@@ -166,10 +179,20 @@ shinyUI(dashboardPage(
 
               tabPanel(
                 "Control Type",
-                uiOutput("controlID"),
-                #selectInput("controlType", "Choose a control type:",
-                #    choices = controlNames),
-                uiOutput("array"),
+                selectInput("controlType", "Choose a control type:",
+                    choices = c(
+                      "BISULFITE CONVERSION I",
+                      "BISULFITE CONVERSION II",
+                      "HYBRIDIZATION",
+                      "SPECIFICITY I",
+                      "SPECIFICITY II",
+                      "TARGET REMOVAL",
+                      "BISULFITE CONVERSION I",
+                      "EXTENSION",
+                      "STAINING",
+                      "NON-POLYMORPHIC"
+                    ), selected = "BISULFITE CONVERSION I"),
+                selectInput("select_slide", "Select slide:", choices = c()),
                   withSpinner(plotOutput("controlTypePlotGreen")),
                   withSpinner(plotOutput("controlTypePlotRed"))
               ),
@@ -196,7 +219,9 @@ shinyUI(dashboardPage(
                 h4("Raw"),
                 withSpinner(plotly::plotlyOutput("graph_minfi_densityplotraw")),
                 h4("Processed"),
-                withSpinner(plotly::plotlyOutput("graph_minfi_densityplot"))
+                withSpinner(plotly::plotlyOutput("graph_minfi_densityplot")),
+                h4("Violin plot"),
+                withSpinner(plotly::plotlyOutput("graph_violin"))
               ),
 
               tabPanel(

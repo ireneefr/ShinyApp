@@ -338,7 +338,7 @@ create_densityplot <- function(Bvalues, n = 200000) {
     plotly_config() # %>% plotly::toWebGL()
 }
 
-create_densityplot2 <- function(Bvalues, n = 200000){
+create_violin <- function(Bvalues, n = 200000){
   plotly::ggplotly(
     Bvalues[sample(seq_len(nrow(Bvalues)), n), ] %>%
       tidyr::pivot_longer(
@@ -347,9 +347,9 @@ create_densityplot2 <- function(Bvalues, n = 200000){
         values_to = "Bvalues"
       ) %>%
       ggplot2::ggplot(ggplot2::aes(
-        x = .data$Bvalues, color = .data$sample
+        x = .data$Bvalues, y = .data$sample, color = .data$sample
       )) +
-      ggplot2::stat_density(position = "identity", geom = "line") +
+      ggplot2::stat_ydensity(position = "identity", geom = "violin") +
       ggplot2::theme_bw() +
       ggplot2::theme(
         panel.grid.major = ggplot2::element_blank(),

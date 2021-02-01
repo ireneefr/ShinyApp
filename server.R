@@ -13,7 +13,7 @@ library(reshape2) #melt in control type
 library(ggplot2) #ggplot in control type
 
 source("run-methylation.R")
-#source("shinyMethylSet.R")
+source("shinyMethylSet.R")
 source("utils_analysis.R")
 source("utils_graphs.R")
 source("utils_download.R")
@@ -291,40 +291,22 @@ shinyServer(function(input, output, session) {
   })
 
   
-##################################################################################################
-  
-  
-  # READ RGSET
-  rgSet <- reactive({
-    rgSet <- read.metharray.exp(targets=rval_sheet(), force = TRUE)
-    # Define the sample names into the rgSet
-    sampleNames(rgSet) <- paste(rval_sheet()$Sample_Group,rval_sheet()$Sample_Name,sep=".")
-    rgSet
-  })
-
-  
-#  output$loaded_rgSet <- renderText({
-#    if (!is.null(rgSet())){
-#      "- The rgSet has been created correctly."
-#    }
-#  })
-  
-  
-  # CREATE SHINY METHYL OBJECT
-  shinyMethylSet1 <- reactive({
-    summary <- shinySummarizepr(rval_rgset())
-  })
-
-####################################################################################################
-
-
-
-
-  
   # We change the page to the next one
   observeEvent(input$button_input_next, {
     # check if rgset is loaded
     req(rval_rgset())
+    
+    updateSelectInput(
+      session,
+      "select_slide",
+      choices = rval_sheet_target()$Slide
+    )
+    
+    updateSelectInput(
+      session,
+      "select_control",
+      selected = "BISULFITE CONVERSION I"
+    )
     
     # update PCA parameters
     updateSelectInput(
@@ -355,40 +337,17 @@ shinyServer(function(input, output, session) {
     )
     
     shinyjs::enable("button_minfi_select")
-    updateNavbarPage(session, "navbar_epic", "Normalization")
+    updateTabItems(session, "menu", "Normalization")
   })
 
 ##################################################################################
-  output$controlID <- renderUI({
-    greenControls   <-  getGreenControls(shinyMethylSet1())
-    controlNames    <-  names(greenControls)
-    selectInput("controlType", "Choose a control type:",
-                choices = controlNames)
-  })
 
-    
-  output$array <- renderUI({
-    arrayNames      <- shinyMethylSet1()@phenotype$Array
-    selectInput("arrayID", "Select array:", arrayNames)
-  })
-  
-  
   ## CONTROL TYPE PLOTS
   output$controlTypePlotGreen <- renderPlot({
     if (!is.null(input$controlType)){
       
-      cnt <- input$controlType
-      
-      
-      groupNames      <- shinyMethylSet1()@phenotype$Sample_Group
-      
-      
-      sampleNames     <-  rval_sheet()$Samples_Name #sampleNames(shinyMethylSet1())
-      
-        
-      greenControls   <-  getGreenControls(shinyMethylSet1())
-      
-      
+      groupNames <- rval_sheet_target()$Sample_Group
+      sampleNames <- rval_sheet_target()$Samples_Name #sampleNames(shinyMethylSet1())
       
       if (input$controlType %in% c("BISULFITE CONVERSION I", "BISULFITE CONVERSION II", "HYBRIDIZATION", "SPECIFICITY I",
                                    "SPECIFICITY II", "TARGET REMOVAL")){
@@ -398,60 +357,50 @@ shinyServer(function(input, output, session) {
         
       } else {threshold <- 0}
       
-      if (length(sampleNames) >= 50){
-        arr <- input$arrayID
-        column_names <- colnames(greenControls[[cnt]])
-        idx_col <- grep(arr, column_names)
-        subset <- greenControls[[cnt]][, idx_col]
-        title <- paste("-", arr)
-        # array_names <- substr(colnames(subset), nchar(slideNames[1]) + 2, nchar(slideNames[1]) + 7)
-        # colnames(subset) <- array_names
-      }  else {
-        subset <- greenControls[[cnt]]
-        title <- ""
-      }
-      print("Plot")
-      log2_subset_GC <- log2(subset)
-      df_subset_GC <- melt(log2_subset_GC)
-      ggplot(data=as.data.frame(df_subset_GC), aes(x=Var2, y=value)) +
+      green <- getGreen(rval_rgset())
+      ctrlAddress <- getControlAddress(rval_rgset(), controlType = input$controlType)
+      
+      green_control <- log2(green[ctrlAddress, ,drop = FALSE])
+      
+      slide <- input$select_slide
+      title <- paste("-", slide)
+      
+      subset <- reshape2::melt(green_control)
+      subset2 <- subset[grepl(slide, subset$Var2), ]
+      
+      ggplot(data=as.data.frame(subset2), aes(x=Var2, y=value)) +
         geom_point(color="darkgreen", size=1.5) + scale_y_continuous(limits = c(-1, 20)) +
         theme(axis.text.x = element_text(hjust = 1, angle=45)) +
         geom_hline(yintercept =threshold, linetype="dashed") + ylab("Log2 Intensity") +
         scale_x_discrete(labels=groupNames) + xlab("Samples") + ggtitle(paste("Green Channel", title))
     }
-  }
-  )
+  })
   
   output$controlTypePlotRed <- renderPlot({
     if (!is.null(input$controlType)){
-      cnt <- input$controlType
-      groupNames      <- shinyMethylSet1()@phenotype$Sample_Group
-      sampleNames     <-  rval_sheet()$Samples_Name #sampleNames(shinyMethylSet1())
-      redControls     <-  getRedControls(shinyMethylSet1())
+      groupNames <- rval_sheet_target()$Sample_Group
+      sampleNames <- rval_sheet_target()$Samples_Name
       
       if (input$controlType %in% c("BISULFITE CONVERSION I", "BISULFITE CONVERSION II", "HYBRIDIZATION", "SPECIFICITY I",
                                    "SPECIFICITY II", "TARGET REMOVAL")){
         threshold <- 1
       } else if (input$controlType %in% c("EXTENSION", "STAINING", "NON-POLYMORPHIC")){
         threshold <- 5 # you can increase the threshold
+        
       } else {threshold <- 0}
       
-      if (length(sampleNames) >= 50){
-        arr <- input$arrayID
-        column_names <- colnames(redControls[[cnt]])
-        idx_col <- grep(arr, column_names)
-        subset <- redControls[[cnt]][, idx_col]
-        title <- paste("-", arr)
-        # array_names <- substr(colnames(subset), nchar(slideNames[1]) + 2, nchar(slideNames[1]) + 7)
-        # colnames(subset) <- array_names
-      }  else {
-        subset <- redControls[[cnt]]
-        title <- ""
-      }
+      red <- getRed(rval_rgset())
+      ctrlAddress <- getControlAddress(rval_rgset(), controlType = input$controlType)
       
-      log2_subset_GC <- log2(subset)
-      df_subset_GC <- melt(log2_subset_GC)
-      ggplot(data=as.data.frame(df_subset_GC), aes(x=Var2, y=value)) +
+      red_control <- log2(red[ctrlAddress, ,drop = FALSE])
+      
+      slide <- input$select_slide
+      title <- paste("-", slide)
+      
+      subset <- reshape2::melt(red_control)
+      subset2 <- subset[grepl(slide, subset$Var2), ]
+      
+      ggplot(data=as.data.frame(subset2), aes(x=Var2, y=value)) +
         geom_point(color="red", size=1.5) + scale_y_continuous(limits = c(-1, 20)) +
         theme(axis.text.x = element_text(hjust = 1, angle=45)) +
         geom_hline(yintercept =threshold, linetype="dashed") + ylab("Log2 Intensity") +
@@ -563,6 +512,9 @@ shinyServer(function(input, output, session) {
   
   output$graph_minfi_densityplotraw <- plotly::renderPlotly(rval_plot_densityplotraw())
   output$graph_minfi_densityplot <- plotly::renderPlotly(rval_plot_densityplot())
+  
+  rval_plot_violin <- reactive(create_violin(beta_raw(), nrow(beta_raw())))
+  output$graph_violin <- plotly::renderPlotly(rval_plot_violin())
   
 
   # PCA
@@ -977,7 +929,7 @@ shinyServer(function(input, output, session) {
 
   # Update of heatmap controls
   observeEvent(input$button_limma_calculatedifs, {
-    updateTabsetPanel(session, "tabset_limma", "differential_cpgs")
+    updateTabItems(session, "tabset_limma", "differential_cpgs")
 
     updateSelectInput(
       session,
