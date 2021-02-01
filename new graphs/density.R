@@ -84,3 +84,29 @@ ggplotly(ggplot(plotbval, aes(x = bval, color = sample)) +
            theme(panel.grid.major = element_blank(),
                  panel.grid.minor = element_blank())
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+channel <- reactive(getProbeInfo(rval_rgset(), type = input$probeType)[, "Name"])
+
+beta_raw <- reactive(subset(rval_rgset_getBeta(), rownames(rval_rgset_getBeta()) %in% channel()))
+rval_plot_densityplotraw <- reactive(create_densityplot(beta_raw(), nrow(beta_raw())))
+
+#beta_normalized <- reactive(rval_gset_getBeta()[rownames(rval_gset_getBeta()) %in% channel(),])
+#rval_plot_densityplot <- reactive(create_densityplot(beta_normalized(), nrow(beta_normalized())))
+
+
+
+
+
+
