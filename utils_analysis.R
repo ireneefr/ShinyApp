@@ -178,19 +178,23 @@ generate_limma_fit <- function(Mvalues, design, weighting) {
 
 # DMPs CORE FUNCTIONS
 calculate_global_difs <- function(Bvalues_totales, grupos, contrasts,
-                                  cores) {
+                                  cores) { print(contrasts)
   if (!is.null(Bvalues_totales$cpg)) {
     rownames(Bvalues_totales) <- Bvalues_totales$cpg
     Bvalues_totales$cpg <- NULL
   }
 
+  print(levels(grupos))
 
   doParallel::registerDoParallel(cores)
-
+  print(cores)
+print(head(data.frame(cpg = rownames(Bvalues_totales)))) 
+  
   # calcular medias
   all.means <- foreach::foreach(grupo = levels(grupos), .combine = cbind) %dopar% {
-    isolate({
+    shiny::isolate({
       single.means <- data.frame(cpg = rownames(Bvalues_totales))
+      print(single.means)
       nombre_media <- paste("mean", grupo, sep = "_")
       single.means[nombre_media] <- rowMeans(Bvalues_totales[,
         grupos == grupo,
@@ -201,10 +205,10 @@ calculate_global_difs <- function(Bvalues_totales, grupos, contrasts,
   }
 
   all.means$cpg <- row.names(Bvalues_totales)
-
+print(head(all.means))
   # calcular diferencias
   all.dif <- foreach::foreach(cont = contrasts, .combine = cbind) %dopar% {
-    isolate({
+    shiny::isolate({
       single_dif <- data.frame(cpg = rownames(Bvalues_totales))
       grupo1 <- limma::strsplit2(cont, "-")[1]
       grupo2 <- limma::strsplit2(cont, "-")[2]
@@ -233,10 +237,11 @@ calculate_global_difs <- function(Bvalues_totales, grupos, contrasts,
 
 find_dif_cpgs <- function(design, fit, contrasts, trend = FALSE,
                           robust = FALSE, cores) {
+  
   doParallel::registerDoParallel(cores)
 
   tabla_global <- foreach::foreach(contrast = contrasts) %do% {
-    isolate({
+    shiny::isolate({
       contraste <- limma::makeContrasts(
         contrasts = contrast,
         levels = design
@@ -281,7 +286,7 @@ create_filtered_list <- function(limma_list, global_difs, deltaB,
   doParallel::registerDoParallel(cores)
 
   filtered_list <- foreach::foreach(cont = names(limma_list)) %dopar% {
-    isolate({
+    shiny::isolate({
       dif_target <- paste("dif", limma::strsplit2(
         cont,
         "-"
@@ -352,7 +357,7 @@ find_dmrs <- function(find_dif_cpgs, minCpGs, platform, voi,
       names(ranking_list)
     )
   }) %do% {
-    isolate({
+    shiny::isolate({
       # Generating mCSEA result
       result <- mCSEA::mCSEATest(ranking,
         minCpGs = minCpGs,
@@ -433,7 +438,7 @@ filter_dmrs <- function(mcsea_list, fdr, pval, dif_beta, regionsTypes,
       names(mcsea_list)
     )
   }) %do% {
-    isolate({
+    shiny::isolate({
       # Filtering regions by fdr
       for (region in regionsTypes) {
         result[[region]] <- result[[region]][result[[region]]$padj <

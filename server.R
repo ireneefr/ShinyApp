@@ -11,16 +11,21 @@ library(dplyr)
 library(minfi)
 library(reshape2) #melt in control type
 library(ggplot2) #ggplot in control type
+library(doParallel)
 
-source("run-methylation.R")
-source("shinyMethylSet.R")
+#source("run-methylation.R")
+#source("shinyMethylSet.R")
 source("utils_analysis.R")
 source("utils_graphs.R")
 source("utils_download.R")
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output, session) {
+  
+  number_cores <- parallel::detectCores() / 2
+  shinyOptions(n_cores = round(number_cores))
   n_cores <- getShinyOption("n_cores")
+  #cl <- makePSOCKcluster(4)
 
   # Max size
   options(shiny.maxRequestSize = 8000 * 1024^2) # 5MB getShinyOption("shiny.maxRequestSize") | 30*1024^2 = 30MB
@@ -887,6 +892,8 @@ shinyServer(function(input, output, session) {
       globaldifs <- calculate_global_difs(rval_gset_getBeta(), rval_voi(), rval_contrasts(),
         cores = n_cores
       )
+      print(cores)
+      print(n_cores)
     })
 
     if (!exists("globaldifs", inherits = FALSE)) {
@@ -929,7 +936,7 @@ shinyServer(function(input, output, session) {
           title = "Contrasts Calculation Error",
           "An unexpected error has ocurred during contrasts calculation. Please, generate the model again and check if it is correct.
         If the problem persists, report the error to the maintainer",
-          easyClose = TRUE,
+          easyn_coresose = TRUE,
           footer = NULL
         )
       )
@@ -979,7 +986,7 @@ shinyServer(function(input, output, session) {
       choices = rval_contrasts()
     )
 
-    # disable button to avoid repeat clicking
+    # disable button to avoid repeat n_coresicking
     shinyjs::disable("button_limma_calculatedifs")
 
     # force rval_filteredlist
@@ -1013,9 +1020,9 @@ shinyServer(function(input, output, session) {
       )
     }
 
-    # enable and click heatmap button to get default graph
+    # enable and n_coresick heatmap button to get default graph
     shinyjs::enable("button_limma_heatmapcalc")
-    shinyjs::click("button_limma_heatmapcalc")
+    #shinyjs::n_coresick("button_limma_heatmapcalc")
 
     # enable again the button to allow repeat calculation
     shinyjs::enable("button_limma_calculatedifs")
