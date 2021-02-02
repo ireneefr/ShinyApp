@@ -47,6 +47,9 @@ shinyServer(function(input, output, session) {
   # Enable load button every time file input is updated
   observeEvent(input$fileinput_input, shinyjs::enable("button_input_load"))
   
+  
+  ########## rval_sheet() METHARRAY SHEET ##########
+  
   # When you press button_input_load, the data is unzipped and the metharray sheet is loaded
   rval_sheet <- eventReactive(input$button_input_load, {
     
@@ -131,11 +134,8 @@ shinyServer(function(input, output, session) {
   
   
   # The checkbox of samples to process is updated when samplenamevar changes
-  observeEvent(
-    {
-      input$select_input_samplenamevar
-      input$select_input_groupingvar
-    },
+  observeEvent({input$select_input_samplenamevar
+                input$select_input_groupingvar},
     updatePickerInput(
       session,
       "selected_samples",
@@ -166,7 +166,7 @@ shinyServer(function(input, output, session) {
   )
   
   
-  
+  ########## rval_rgset() RGCHANNEL ##########
   
   # rval_rgset loads RGSet using read.metharray.exp and the sample sheet (rval_sheet())
   rval_rgset <- eventReactive(input$button_input_next, ignoreNULL = FALSE, {
@@ -340,9 +340,9 @@ shinyServer(function(input, output, session) {
     updateTabItems(session, "menu", "Normalization")
   })
 
-##################################################################################
 
-  ## CONTROL TYPE PLOTS
+  ########## CONTROL TYPE PLOTS ##########
+  
   output$controlTypePlotGreen <- renderPlot({
     if (!is.null(input$controlType)){
       
@@ -405,16 +405,11 @@ shinyServer(function(input, output, session) {
         theme(axis.text.x = element_text(hjust = 1, angle=45)) +
         geom_hline(yintercept =threshold, linetype="dashed") + ylab("Log2 Intensity") +
         scale_x_discrete(labels=groupNames) + xlab("Samples") + ggtitle(paste("Red Channel", title))
-    } }
-  )
-##################################################################################
-
-
-
+    } })
   
-  # MINFI NORMALIZATION
+
+  ########## rval_gset() NORMALIZATION ##########
   
-  # Calculation of minfi normalized data
   rval_gset <- eventReactive(input$button_minfi_select, {
     validate(need(
       !is.null(rval_rgset()),
@@ -466,6 +461,7 @@ shinyServer(function(input, output, session) {
     )
   })
   
+
   
   # filtered probes info
   
@@ -476,7 +472,8 @@ shinyServer(function(input, output, session) {
   
   output$text_minfi_probes <- renderText(paste(rval_gsetprobes(), "positions after normalization"))
   
-  # getBeta/getM reactives
+  ################## B & M VALUES ######################
+  
   rval_rgset_getBeta <- eventReactive(rval_rgset(), {
     bvalues <- as.data.frame(minfi::getBeta(rval_rgset()))
     colnames(bvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
@@ -494,9 +491,8 @@ shinyServer(function(input, output, session) {
     colnames(mvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
     mvalues
   })
-  ##############
   
-  # Minfi Graphics
+  ################ DENSITY PLOT #####################
   
   channel <- reactive(getProbeInfo(rval_rgset(), type = input$probeType)[, "Name"])
   
@@ -513,11 +509,40 @@ shinyServer(function(input, output, session) {
   output$graph_minfi_densityplotraw <- plotly::renderPlotly(rval_plot_densityplotraw())
   output$graph_minfi_densityplot <- plotly::renderPlotly(rval_plot_densityplot())
   
-  rval_plot_violin <- reactive(create_violin(beta_raw(), nrow(beta_raw())))
-  output$graph_violin <- plotly::renderPlotly(rval_plot_violin())
+  ################## VIOLIN PLOT #####################
+  
+  create_violinplot <- function(Bvalues, n = 200000) {
+    # Creating density plot using a sample of n CpGs
+    
+      Bvalues[sample(seq_len(nrow(Bvalues)), n), ] %>%
+        tidyr::pivot_longer(
+          cols = seq_len(ncol(Bvalues)),
+          names_to = "sample",
+          values_to = "Bvalues"
+        ) %>% 
+        ggplot2::ggplot(ggplot2::aes(
+          x = .data$Bvalues, y = .data$sample, color = .data$sample
+        )) +
+        ggplot2::geom_violin() +
+        ggplot2::geom_vline(xintercept = 0.5, 
+                            linetype = "dashed", 
+                            alpha = 0.5) +
+        ggplot2::stat_summary(fun = mean, 
+                              geom = "crossbar") +
+        ggplot2::xlab("Beta") +
+        ggplot2::ylab("") +
+        ggplot2::theme_bw() +
+        ggplot2::theme(legend.position = "none",
+          panel.grid.major = ggplot2::element_blank(),
+          panel.grid.minor = ggplot2::element_blank())
+  }
+  
+  rval_plot_violin <- reactive(create_violinplot(rval_rgset_getBeta(), nrow(rval_rgset_getBeta())))
+  output$graph_violin <- renderPlot(rval_plot_violin())
   
 
-  # PCA
+  ########## PCA PLOT ##########
+  
   rval_plot_pca <- eventReactive(
     list(input$button_pca_update, input$button_minfi_select),
     create_pca(

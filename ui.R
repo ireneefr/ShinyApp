@@ -221,7 +221,7 @@ shinyUI(dashboardPage(
                 h4("Processed"),
                 withSpinner(plotly::plotlyOutput("graph_minfi_densityplot")),
                 h4("Violin plot"),
-                withSpinner(plotly::plotlyOutput("graph_violin"))
+                withSpinner(plotOutput("graph_violin"))
               ),
 
               tabPanel(
