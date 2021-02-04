@@ -987,8 +987,8 @@ shinyServer(function(input, output, session) {
 
     rval_analysis_finished(TRUE)
     print("DIFFCPG")
-    print(head(dif_cpgs))
-    print(nrow(dif_cpgs))
+    #print(head(dif_cpgs))
+    #print(nrow(dif_cpgs))
 
     dif_cpgs
   })
