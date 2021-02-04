@@ -105,6 +105,7 @@ shinyUI(dashboardPage(
                 ),
                 multiple = TRUE
               ),
+              selectInput("select_input_sex", "", c()),
               actionButton("button_input_next", "Continue")
             )
           ),
@@ -191,7 +192,7 @@ shinyUI(dashboardPage(
                       "EXTENSION",
                       "STAINING",
                       "NON-POLYMORPHIC"
-                    ), selected = "BISULFITE CONVERSION I"),
+                    ), selected = 1),
                 selectInput("select_slide", "Select slide:", choices = c()),
                   withSpinner(plotOutput("controlTypePlotGreen")),
                   withSpinner(plotOutput("controlTypePlotRed"))
@@ -221,7 +222,10 @@ shinyUI(dashboardPage(
                 h4("Processed"),
                 withSpinner(plotly::plotlyOutput("graph_minfi_densityplot")),
                 h4("Violin plot"),
-                withSpinner(plotOutput("graph_violin"))
+                withSpinner(plotOutput("graph_violin")),
+                h4("Failure Rate Plot"),
+                textOutput("text"),
+                withSpinner(plotly::plotlyOutput("failure_rate_plot"))
               ),
 
               tabPanel(
@@ -507,6 +511,13 @@ shinyUI(dashboardPage(
                 DT::DTOutput("table_limma_ann") %>% shinycssloaders::withSpinner(),
                 selectInput(inputId = "select_limma_anncontrast", label = "", choices = "", selected = ""),
                 actionButton(inputId = "button_limma_indboxplotcalc", label = "Plot")
+              ),
+              tabPanel(
+                "Manhattan & Volcano",
+                h4("Manhattan Plot"),
+                withSpinner(plotOutput("manhattan_plot")),
+                h4("Volcano Plot"),
+                withSpinner(plotOutput("volcano_plot"))
               )
             )
           )

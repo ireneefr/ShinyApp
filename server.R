@@ -13,8 +13,6 @@ library(reshape2) #melt in control type
 library(ggplot2) #ggplot in control type
 library(doParallel)
 
-#source("run-methylation.R")
-#source("shinyMethylSet.R")
 source("utils_analysis.R")
 source("utils_graphs.R")
 source("utils_download.R")
@@ -133,6 +131,13 @@ shinyServer(function(input, output, session) {
       label = "Select Donor Variable:",
       choices = colnames(rval_sheet())
     )
+    updateSelectInput(
+      session,
+      "select_input_sex",
+      label = "Select Sex Column",
+      choices = c("None", colnames(rval_sheet()))
+    )
+
     
     shinyjs::enable("button_input_next") # Enable button continue
   })
@@ -342,7 +347,7 @@ shinyServer(function(input, output, session) {
     )
     
     shinyjs::enable("button_minfi_select")
-    updateTabItems(session, "menu", "Normalization")
+    updateTabItems(session, "menu", "normalization")
   })
 
 
@@ -477,17 +482,19 @@ shinyServer(function(input, output, session) {
   
   output$text_minfi_probes <- renderText(paste(rval_gsetprobes(), "positions after normalization"))
   
-  ################## B & M VALUES ######################
+  ########## B & M VALUES ######################
   
   rval_rgset_getBeta <- eventReactive(rval_rgset(), {
     bvalues <- as.data.frame(minfi::getBeta(rval_rgset()))
     colnames(bvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
+    print("Bvalues")
     bvalues
   })
   
   rval_gset_getBeta <- eventReactive(rval_gset(), {
     bvalues <- as.data.frame(minfi::getBeta(rval_gset()))
     colnames(bvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
+    print("Bvalues")
     bvalues
   })
   
@@ -497,7 +504,7 @@ shinyServer(function(input, output, session) {
     mvalues
   })
   
-  ################ DENSITY PLOT #####################
+  ########## DENSITY PLOT #####################
   
   channel <- reactive(getProbeInfo(rval_rgset(), type = input$probeType)[, "Name"])
   
@@ -514,7 +521,7 @@ shinyServer(function(input, output, session) {
   output$graph_minfi_densityplotraw <- plotly::renderPlotly(rval_plot_densityplotraw())
   output$graph_minfi_densityplot <- plotly::renderPlotly(rval_plot_densityplot())
   
-  ################## VIOLIN PLOT #####################
+  ########## VIOLIN PLOT #####################
   
   create_violinplot <- function(Bvalues, n = 200000) {
     # Creating density plot using a sample of n CpGs
@@ -546,6 +553,30 @@ shinyServer(function(input, output, session) {
   output$graph_violin <- renderPlot(rval_plot_violin())
   
 
+  
+  ########## FAILURE RATE PLOT ##########
+  
+  beta_pvalue <- function(rgset, betas){
+    pval <- as.matrix(minfi::detectionP(rgset))
+    beta_pval <- as.matrix(betas)
+    beta_pval[pval>=0.01] <- NA
+    fail <- as.data.frame(cbind(sort((apply(beta_pval,2,function(x) sum(is.na(x)))/nrow(beta_pval)*100))))
+    colnames(fail)[1] <- "probe_failure_rate"
+
+  plotly::ggplotly(ggplot(fail, aes(x = rownames(fail), y = probe_failure_rate)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, max(fail$probe_failure_rate) + 0.5)) +
+    geom_hline(yintercept = 5, linetype = "dashed", color = "red", size = 0.5) + 
+    geom_hline(yintercept = 10, linetype = "dashed", color = "red", size = 0.5) +
+    xlab("Sample Name") + ylab("% Probe Failure Rate") + 
+    coord_flip() +
+    theme_bw())
+  }
+  
+  failure_plot <- reactive(beta_pvalue(rval_rgset(), rval_rgset_getBeta()))
+  output$failure_rate_plot <- plotly::renderPlotly(failure_plot())
+  
+  
   ########## PCA PLOT ##########
   
   rval_plot_pca <- eventReactive(
@@ -615,19 +646,19 @@ shinyServer(function(input, output, session) {
   output$graph_minfi_bisulfiterawII <- plotly::renderPlotly(rval_plot_bisulfiterawII())
 
   # Sex prediction
-
+  
   rval_plot_sexprediction <- reactive({
     req(rval_gset())
-    create_sexplot(rval_gset(), rval_sheet_target()[, input$select_input_samplenamevar])
+    create_sexplot(rval_gset(), rval_sheet_target()[, input$select_input_samplenamevar], rval_sheet_target()[, input$select_input_sex])
   })
-
+  
   rval_plot_sextable <- reactive({
     req(rval_gset())
-    data.frame(name = rval_sheet_target()[[input$select_input_samplenamevar]], sex = as.data.frame(minfi::pData(rval_gset()))[["predictedSex"]])
+    data.frame(name = rval_sheet_target()[[input$select_input_samplenamevar]], sex = rval_sheet_target()[[input$select_input_sex]], preditedSex = as.data.frame(minfi::pData(rval_gset()))[["predictedSex"]])
   })
-
+  
   output$graph_minfi_sex <- plotly::renderPlotly(rval_plot_sexprediction())
-
+  
   output$table_minfi_sex <- DT::renderDT(
     rval_plot_sextable(),
     rownames = FALSE,
@@ -955,6 +986,9 @@ shinyServer(function(input, output, session) {
     )
 
     rval_analysis_finished(TRUE)
+    print("DIFFCPG")
+    print(head(dif_cpgs))
+    print(nrow(dif_cpgs))
 
     dif_cpgs
   })
@@ -1222,18 +1256,34 @@ shinyServer(function(input, output, session) {
 
   table_annotation <- eventReactive(list(input$button_limma_heatmapcalc, input$select_limma_anncontrast), {
     req(rval_filteredlist())
+    
+    print("rval_filteredlist")
+    print(head(rval_filteredlist()))
 
     dif_target <- paste("dif",
       limma::strsplit2(input$select_limma_anncontrast, "-")[1],
       limma::strsplit2(input$select_limma_anncontrast, "-")[2],
       sep = "_"
     )
+    print(dif_target)
+    print("annotation")
+    print(head(rval_annotation()))
+    print("globaldifs")
+    print(head(rval_globaldifs()))
 
 
     temp <- rval_annotation()[row.names(rval_annotation()) %in% rval_filteredlist()[[input$select_limma_anncontrast]]$cpg, ]
     temp$dif_beta <- rval_globaldifs()[[dif_target]][rval_globaldifs()[["cpg"]] %in% row.names(temp)]
     temp$fdr <- rval_filteredlist()[[input$select_limma_anncontrast]][["adj.P.Val"]][rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]] %in% row.names(temp)]
-
+    temp$pvalue <- rval_filteredlist()[[input$select_limma_anncontrast]][["P.Value"]][rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]] %in% row.names(temp)]
+    temp$chr <- as.numeric(as.character(gsub("chr", "", temp$chr)))
+    gene <- vapply(strsplit(temp$UCSC_RefGene_Name,";"), `[`, 1, FUN.VALUE=character(1))
+    gene[is.na(gene)]<-""
+    print(head(gene))
+    temp$gene <- gene
+    
+    print("temp")
+    print(head(temp))
 
     temp
   })
@@ -1264,6 +1314,26 @@ shinyServer(function(input, output, session) {
 
   output$graph_limma_indboxplot <- renderPlot(ind_boxplot())
 
+  
+  ########## MANHATTAN PLOT ##########
+  
+  
+  manhattan_graph <- reactive(qqman::manhattan(table_annotation(), chr = "chr", bp = "pos", snp = "gene", p = "pvalue",
+                               annotatePval = 1, suggestiveline = T, genomewideline = T, annotateTop = T))
+  volcano_graph <- reactive(MultiDataSet::volcano_plot(pval = table_annotation()$pvalue, fc = table_annotation()$dif_beta,
+                                                       table_annotation()$gene, tFC = 0.2, show.labels = T))
+  
+  
+  output$manhattan_plot <- renderPlot(manhattan_graph())
+  output$volcano_plot <- renderPlot(volcano_graph())
+  
+  
+  
+  
+  
+  ########## VOLCANO PLOT ##########
+  
+  
 
   # Disable or enable buttons depending on software state
   observeEvent(
