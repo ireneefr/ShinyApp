@@ -514,10 +514,11 @@ shinyUI(dashboardPage(
               ),
               tabPanel(
                 "Manhattan & Volcano",
+                selectInput(inputId = "select_anncontrast", label = "", choices = "", selected = ""),
                 h4("Manhattan Plot"),
-                withSpinner(plotOutput("manhattan_plot")),
+                withSpinner(plotly::plotlyOutput("manhattan_plot")),
                 h4("Volcano Plot"),
-                withSpinner(plotOutput("volcano_plot"))
+                withSpinner(plotly::plotlyOutput("volcano_plot"))
               )
             )
           )

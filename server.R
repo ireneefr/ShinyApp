@@ -487,14 +487,12 @@ shinyServer(function(input, output, session) {
   rval_rgset_getBeta <- eventReactive(rval_rgset(), {
     bvalues <- as.data.frame(minfi::getBeta(rval_rgset()))
     colnames(bvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
-    print("Bvalues")
     bvalues
   })
   
   rval_gset_getBeta <- eventReactive(rval_gset(), {
     bvalues <- as.data.frame(minfi::getBeta(rval_gset()))
     colnames(bvalues) <- rval_sheet_target()[[input$select_input_samplenamevar]]
-    print("Bvalues")
     bvalues
   })
   
@@ -565,11 +563,12 @@ shinyServer(function(input, output, session) {
 
   plotly::ggplotly(ggplot(fail, aes(x = rownames(fail), y = probe_failure_rate)) +
     geom_bar(stat = "identity", fill = "steelblue") +
-    scale_y_continuous(expand = c(0, 0), limits = c(0, max(fail$probe_failure_rate) + 0.5)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, 100), breaks = seq(0, 100, 5)) +  ###max(fail$probe_failure_rate) + 0.5
     geom_hline(yintercept = 5, linetype = "dashed", color = "red", size = 0.5) + 
     geom_hline(yintercept = 10, linetype = "dashed", color = "red", size = 0.5) +
     xlab("Sample Name") + ylab("% Probe Failure Rate") + 
     coord_flip() +
+    annotation_logticks(base = 2, sides = "bl") +
     theme_bw())
   }
   
@@ -923,8 +922,6 @@ shinyServer(function(input, output, session) {
       globaldifs <- calculate_global_difs(rval_gset_getBeta(), rval_voi(), rval_contrasts(),
         cores = n_cores
       )
-      print(cores)
-      print(n_cores)
     })
 
     if (!exists("globaldifs", inherits = FALSE)) {
@@ -986,9 +983,6 @@ shinyServer(function(input, output, session) {
     )
 
     rval_analysis_finished(TRUE)
-    print("DIFFCPG")
-    #print(head(dif_cpgs))
-    #print(nrow(dif_cpgs))
 
     dif_cpgs
   })
@@ -1016,6 +1010,13 @@ shinyServer(function(input, output, session) {
     updateSelectInput(
       session,
       "select_limma_anncontrast",
+      label = "Contrast",
+      choices = rval_contrasts()
+    )
+    
+    updateSelectInput(
+      session,
+      "select_anncontrast",
       label = "Contrast",
       choices = rval_contrasts()
     )
@@ -1085,6 +1086,29 @@ shinyServer(function(input, output, session) {
       }
     )
   })
+  
+  rval_list <- reactive({
+    withProgress(
+      message = "Performing contrasts calculations...",
+      value = 1,
+      max = 6,
+      {
+        setProgress(message = "Calculating global difs...", value = 1)
+        rval_globaldifs()
+        setProgress(message = "Calculating eBayes...", value = 4)
+        rval_finddifcpgs()
+        setProgress(message = "Calculating filtered list...", value = 5)
+        create_list(
+          rval_finddifcpgs(),
+          rval_globaldifs(),
+          cores = n_cores
+        )
+      }
+    )
+  })
+  
+  
+  
 
   rval_filteredlist2heatmap <- reactive({
     join_table <- create_dmps_heatdata(
@@ -1273,9 +1297,25 @@ shinyServer(function(input, output, session) {
 
 
     temp <- rval_annotation()[row.names(rval_annotation()) %in% rval_filteredlist()[[input$select_limma_anncontrast]]$cpg, ]
+    print(head(temp))
+    print(nrow(rval_annotation()))
+    print(nrow(rval_filteredlist()[[input$select_limma_anncontrast]]$cpg))
+    print(nrow(temp))
     temp$dif_beta <- rval_globaldifs()[[dif_target]][rval_globaldifs()[["cpg"]] %in% row.names(temp)]
+    print(head(temp))
+    print(nrow(rval_globaldifs()[[dif_target]]))
+    print(nrow(rval_globaldifs()[["cpg"]]))
+    print(nrow(temp))
     temp$fdr <- rval_filteredlist()[[input$select_limma_anncontrast]][["adj.P.Val"]][rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]] %in% row.names(temp)]
+    print(head(temp))
+    print(nrow(rval_filteredlist()[[input$select_limma_anncontrast]][["adj.P.Val"]]))
+    print(nrow(rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]]))
+    print(nrow(temp))
     temp$pvalue <- rval_filteredlist()[[input$select_limma_anncontrast]][["P.Value"]][rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]] %in% row.names(temp)]
+    print(head(temp))
+    print(nrow(rval_filteredlist()[[input$select_limma_anncontrast]][["P.Value"]]))
+    print(nrow(rval_filteredlist()[[input$select_limma_anncontrast]][["cpg"]]))
+    print(nrow(temp))
     temp$chr <- as.numeric(as.character(gsub("chr", "", temp$chr)))
     gene <- vapply(strsplit(temp$UCSC_RefGene_Name,";"), `[`, 1, FUN.VALUE=character(1))
     gene[is.na(gene)]<-""
@@ -1317,15 +1357,86 @@ shinyServer(function(input, output, session) {
   
   ########## MANHATTAN PLOT ##########
   
+  table_annotation2 <- eventReactive(input$select_anncontrast, {
+    req(rval_list())
+    
+    print("rval_list")
+    print(head(rval_list()))
+    
+    dif_target <- paste("dif",
+                        limma::strsplit2(input$select_anncontrast, "-")[1],
+                        limma::strsplit2(input$select_anncontrast, "-")[2],
+                        sep = "_"
+    )
+    print(dif_target)
+    print("annotation")
+    print(head(rval_annotation()))
+    print("globaldifs")
+    print(head(rval_globaldifs()))
+    
+    
+    temp <- rval_annotation()[row.names(rval_annotation()) %in% rval_list()[[input$select_anncontrast]]$cpg, ]
+    print(head(temp))
+    print(nrow(rval_annotation()))
+    print(nrow(rval_list()[[input$select_anncontrast]]$cpg))
+    print(nrow(temp))
+    print(which(is.na(temp$Name)))
+    temp$dif_beta <- rval_globaldifs()[[dif_target]][rval_globaldifs()[["cpg"]] %in% row.names(temp)]
+    print(head(temp))
+    print(nrow(rval_globaldifs()[[dif_target]]))
+    print(nrow(rval_globaldifs()[["cpg"]]))
+    print(nrow(temp))
+    print(which(is.na(temp$dif_beta)))
+    
+    temp$fdr <- rval_list()[[input$select_anncontrast]][["adj.P.Val"]][rval_list()[[input$select_anncontrast]][["cpg"]] %in% row.names(temp)]
+    print(head(temp))
+    print(nrow(rval_list()[[input$select_anncontrast]][["adj.P.Val"]]))
+    print(nrow(rval_list()[[input$select_anncontrast]][["cpg"]]))
+    print(nrow(temp))
+    print(which(is.na(temp$fdr)))
+    
+    temp$pvalue <- rval_list()[[input$select_anncontrast]][["P.Value"]][rval_list()[[input$select_anncontrast]][["cpg"]] %in% row.names(temp)]
+    print(head(temp))
+    print(nrow(rval_list()[[input$select_anncontrast]][["P.Value"]]))
+    print(nrow(rval_list()[[input$select_anncontrast]][["cpg"]]))
+    print(nrow(temp))
+    print(which(is.na(temp$pvalue)))
+    
+    print("CHR")
+    
+    temp$chr[temp$chr == "chrX"] <- 23
+    temp$chr[temp$chr == "chrY"] <- 24
+    #temp$chr[temp$chr == "chrM"] <- 25
+    
+    
+    
+    print(unique(temp$chr))
+    
+    
+    temp$chr <- as.numeric(as.character(gsub("chr", "", temp$chr)))
+    gene <- vapply(strsplit(temp$UCSC_RefGene_Name,";"), `[`, 1, FUN.VALUE=character(1))
+    gene[is.na(gene)]<-""
+    print(head(gene))
+    temp$gene <- gene
+    print(which(is.na(temp$gene)))
+    print(unique(temp$chr))
+    
+    print("temp")
+    print(head(temp))
+    
+    temp
+  })
   
-  manhattan_graph <- reactive(qqman::manhattan(table_annotation(), chr = "chr", bp = "pos", snp = "gene", p = "pvalue",
-                               annotatePval = 1, suggestiveline = T, genomewideline = T, annotateTop = T))
-  volcano_graph <- reactive(MultiDataSet::volcano_plot(pval = table_annotation()$pvalue, fc = table_annotation()$dif_beta,
-                                                       table_annotation()$gene, tFC = 0.2, show.labels = T))
   
   
-  output$manhattan_plot <- renderPlot(manhattan_graph())
-  output$volcano_plot <- renderPlot(volcano_graph())
+  manhattan_graph <- reactive(plotly::ggplotly(qqman::manhattan(table_annotation2(), chr = "chr", bp = "pos", snp = "gene", p = "pvalue",
+                               annotatePval = 1, suggestiveline = T, genomewideline = T, annotateTop = T)))
+  volcano_graph <- reactive(plotly::ggplotly(MultiDataSet::volcano_plot(pval = table_annotation2()$pvalue, fc = table_annotation2()$dif_beta,
+                                                       table_annotation2()$gene, tFC = 0.2, show.labels = T)))
+  
+  
+  output$manhattan_plot <- plotly::renderPlotly(manhattan_graph())
+  output$volcano_plot <- plotly::renderPlotly(volcano_graph())
   
   
   

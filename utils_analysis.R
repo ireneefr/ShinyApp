@@ -316,6 +316,46 @@ create_filtered_list <- function(limma_list, global_difs, deltaB,
   filtered_list
 }
 
+
+create_list <- function(limma_list, global_difs, cores) {
+  force(limma_list)
+  force(global_difs)
+  
+  doParallel::registerDoParallel(cores)
+  
+  list <- foreach::foreach(cont = names(limma_list)) %dopar% {
+    shiny::isolate({
+      dif_target <- paste("dif", limma::strsplit2(
+        cont,
+        "-"
+      )[1], limma::strsplit2(cont, "-")[2], sep = "_")
+      
+      tt_global <- limma_list[[cont]]
+      
+      tt_global$dif_current <- global_difs[[dif_target]] # indicamos que contraste se aplica
+      
+      tt_global <- tt_global[stats::complete.cases(tt_global), ]
+      
+      data.table::setDT(tt_global)
+      
+      doParallel::stopImplicitCluster()
+      
+      tt_global
+    })
+  }
+  
+  
+  names(list) <- names(limma_list)
+  
+  list
+}
+
+
+
+
+
+
+
 # DMRs CORE FUNCTIONS
 find_dmrs <- function(find_dif_cpgs, minCpGs, platform, voi,
                       regionsTypes, contrasts, bvalues, permutations, ncores) {
