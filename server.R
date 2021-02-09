@@ -37,6 +37,14 @@ shinyServer(function(input, output, session) {
   rval_dmrs_ready2heatmap <- reactiveVal(value = FALSE)
   rval_dmrs_ready2mcsea <- reactiveVal(value = FALSE)
 
+  
+  eventReactive(input$bqc, updateTabItems(session, "menu", "qc"))
+  observeEvent(input$bea, updateTabItems(sesion, "menu", "exploratory_analysis"))
+  observeEvent(input$bd, updateTabItems(session, "menu", "dmp_dmr"))
+  observeEvent(input$bfe, updateTabItems(session, "menu", "functional_enrichment"))
+  observeEvent(input$bs, updateTabItems(session, "menu", "survival"))
+  observeEvent(input$bpm, updateTabItems(session, "menu", "predicted_models"))
+
 
   # Load button
   output$ui_button_input_load <- renderUI({
@@ -1427,16 +1435,61 @@ shinyServer(function(input, output, session) {
     temp
   })
   
+  volcano_data <- eventReactive(table_annotation2(), {
+    pval <- table_annotation2()$pvalue
+    fc <- table_annotation2()$dif_beta
+    names <- table_annotation2()$gene
+    tFC <- 0.2
+    show.labels <- T
+    dta <- data.frame(P.Value = pval, FC = fc, names, clr = "gray87", alp = 0.5, stringsAsFactors = FALSE)
+    head(dta)
+    dta$PV <- -log10(dta$P.Value)
+    dta$feature <- rownames(dta)
+    dta$clr[abs(dta$FC) >= tFC] <- "olivedrab"
+    dta$alp[abs(dta$FC) >= tFC] <- 0.7
+    tPV <- -log10(0.001)
+    dta$clr[dta$PV >= tPV] <- "tan3"
+    dta$alp[dta$PV >= tPV] <- 0.7
+    dta$clr[dta$PV >= tPV & abs(dta$FC) >= tFC] <- "lightskyblue"
+    dta$alp[dta$PV >= tPV & abs(dta$FC) >= tFC] <- 0.9
+    clrvalues <- c("gray87", "tan3", "olivedrab", "lightskyblue")
+    names(clrvalues) <- c("gray87", "tan3", "olivedrab", "lightskyblue")
+    print(head(dta))
+    dta
+  })
+  
+  #volcano_graph <- reactive(plotly::ggplotly(ggplot2::ggplot(volcano_data(), ggplot2::aes_string(x="FC", y="PV", color="clr", fill="clr")) +
+   #                           ggplot2::theme_bw() +
+    #                          ggplot2::geom_point(alpha=1) #+
+                              #ggplot2::scale_colour_manual(values=clrvalues) +
+                              #ggplot2::ylab("expression(-log[10](P-Value))") +
+                              #ggplot2::theme(legend.position="none") +
+                              #ggplot2::xlab("expression(log[2](Fold~~Change))") +
+                              #ggrepel::geom_text_repel(
+                              #  data = subset(volcano_data(), volcano_data()$PV >= tPV & abs(volcano_data()$FC) >= tFC),
+                              #  ggplot2::aes_string("FC", "PV", label="names"),
+                              #  size = 2,
+                              #  box.padding = ggplot2::unit(0.35, "lines"),
+                              #  point.padding = ggplot2::unit(0.3, "lines"),
+                              #  color="black"
+                              #) +
+                              #ggplot2::geom_hline(yintercept=tPV,
+                              #                    linetype="dotdash", color="gray69", size=0.75) +
+                              #ggplot2::geom_vline(xintercept=-tFC,
+                              #                    linetype="dotdash", color="gray69", size=0.75) +
+                              #ggplot2::geom_vline(xintercept=tFC,
+                              #                    linetype="dotdash", color="gray69", size=0.75)))
+  #))
+  manhattan_graph <- reactive(qqman::manhattan(table_annotation2(), chr = "chr", bp = "pos", snp = "gene", p = "pvalue",
+                              annotatePval = 1, suggestiveline = T, genomewideline = T, annotateTop = T))
+  volcano_graph <- reactive(MultiDataSet::volcano_plot(pval = table_annotation2()$pvalue, fc = table_annotation2()$dif_beta,
+                                                       table_annotation2()$gene, tFC = 0.2, show.labels = T))
   
   
-  manhattan_graph <- reactive(plotly::ggplotly(qqman::manhattan(table_annotation2(), chr = "chr", bp = "pos", snp = "gene", p = "pvalue",
-                               annotatePval = 1, suggestiveline = T, genomewideline = T, annotateTop = T)))
-  volcano_graph <- reactive(plotly::ggplotly(MultiDataSet::volcano_plot(pval = table_annotation2()$pvalue, fc = table_annotation2()$dif_beta,
-                                                       table_annotation2()$gene, tFC = 0.2, show.labels = T)))
+  output$manhattan_plot <- renderPlot(manhattan_graph())
+  output$volcano_plot <- renderPlot(volcano_graph())
+  #output$volcano_plot1 <- plotly::renderPlotly(volcano_graph1())
   
-  
-  output$manhattan_plot <- plotly::renderPlotly(manhattan_graph())
-  output$volcano_plot <- plotly::renderPlotly(volcano_graph())
   
   
   

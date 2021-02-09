@@ -36,6 +36,7 @@ controlNames <- c(
 # Load packages
 library(shiny)
 library(shinydashboard)
+library(shinydashboardPlus)
 library(shinycssloaders)
 library(shinyWidgets)
 library(dplyr)
@@ -52,15 +53,21 @@ shinyUI(dashboardPage(
     width = 200,
 
     # MENU
-    sidebarMenu(
-      id = "menu",
-      menuItem("Input", tabName = "input", icon = icon("file-upload")), # input
-      menuItem("Normalization", tabName = "normalization", icon = icon("bar-chart-o")),
-      menuItem("DMPS", tabName = "dmps", icon = icon("signal")),
-      menuItem("DMRS", tabName = "dmrs", icon = icon("signal")),
-      menuItem("Export", tabName = "export", icon = icon("file-download")),
-      menuItem("Help", tabName = "help", icon = icon("question-circle"))
-    ) # plot
+    
+      sidebarMenu(id = "menu",
+                  actionBttn("action1", "RUN", style="gradient", color="primary", size = "md", block = TRUE),
+                  menuItem("Home", tabName = "home"),
+                  menuItem("Input", tabName = "input", icon = icon("file-upload")), # input
+                  menuItem("Normalization", tabName = "normalization", icon = icon("bar-chart-o")),
+                  menuItem("DMPS", tabName = "dmps", icon = icon("signal")),
+                  menuItem("DMRS", tabName = "dmrs", icon = icon("signal")),
+                  menuItem("Export", tabName = "export", icon = icon("file-download")),
+                  menuItem("Help", tabName = "help", icon = icon("question-circle")),
+                  menuItem("QC", tabName = "qc", icon = icon("list")),
+                  menuItem("Exploratory Analysis", tabName = "exploratory_analysis", icon = icon("list")),
+                  menuItem("DMPs/DMRs", tabName = "dmp_dmr", icon = icon("list")),
+                  menuItem("Survival", tabName = "survival", icon = icon("list")),
+                  menuItem("Predicted Models", tabName = "predicted_models", icon = icon("list")))
   ),
 
   # BODY
@@ -68,6 +75,245 @@ shinyUI(dashboardPage(
 
     # SECTIONS
     tabItems(
+      
+      #HOME
+      tabItem(
+        tabName = "home",
+        fluidRow(gradientBox(title = "INPUT DATA", width = 12, gradientColor = "blue"),
+                 column(12,
+                 column(4, bsButton("qc", label = "QC", icon = icon("user"), style = "primary", block = TRUE, size = "large")),
+                 column(4, bsButton("ea", label = "Exploratory Analysis", icon = icon("spinner", class = "spinner-box"), style = "primary", block = TRUE, size = "large")),
+                 column(4, bsButton("d", label = "DMPs/DMRs", icon = icon("flask", class = "flask-box"), style = "primary", block = TRUE, size = "large")),
+                 hr(),
+                 column(4, bsButton("fe", label = "Functional Enrichment", icon = icon("thumbs-o-up"), style = "primary", block = TRUE, size = "large"))),
+          
+          gradientBox(title = bsButton("ac", "Run QC", block = TRUE), gradientColor = "blue", bsButton("ac", "Run QC", block = TRUE)),
+          verticalLayout(
+            splitLayout(cellArgs = list(style = "padding: 6px"),
+              bsButton("bsqc", "QC", style = "info", size = "large", block = "TRUE"),
+              bsButton("bsea", "Exploratory Analysis", style = "info", size = "large", block = "TRUE"),
+              bsButton("bsd", "DMPs/DMRs", style = "info", size = "large", block = "TRUE")), br(),
+            splitLayout(cellArgs = list(style = "padding: 6px"),
+          bsButton("bsfe", "Functional Enrichment", style = "info", size = "large", block = "TRUE"),
+          bsButton("bss", "Survival", style = "info", size = "large", block = "TRUE"),
+          bsButton("bspm", "Predictive Models", style = "info", size = "large", block = "TRUE"))),
+          verticalLayout(
+            splitLayout(cellArgs = list(style = "padding: 6px"),
+                        actionBttn(
+                          inputId = "bqc",
+                          label = "QC", 
+                          style = "material-flat",
+                          color = "primary",
+                          block = TRUE),
+                        actionBttn(
+                          inputId = "bea",
+                          label = "Exploratory Analysis", 
+                          style = "material-flat",
+                          color = "primary",
+                          block = TRUE),
+                        actionBttn(
+                          inputId = "bd",
+                          label = "DMPs/DMRs", 
+                          style = "material-flat",
+                          color = "primary",
+                          block = TRUE)),
+            splitLayout(cellArgs = list(style = "padding: 6px"),
+                        actionBttn(
+                          inputId = "bfe",
+                          label = "Functional Enrichment", 
+                          style = "material-flat",
+                          color = "primary",
+                          block = TRUE),
+                        actionBttn(
+                          inputId = "bs",
+                          label = "Survival", 
+                          style = "material-flat",
+                          color = "primary",
+                          block = TRUE),
+                        actionBttn(
+                          inputId = "bpm",
+                          label = "Predicted Models", 
+                          style = "material-flat",
+                          color = "primary",
+                          block = TRUE)))
+        )
+      ),
+      
+      
+      #QC
+      tabItem(
+        tabName = "qc",
+        fluidPage(
+          # Box1
+          box(width = 12,
+            title = "Normalization Options:",
+            id = "box_qc",
+            collapsible = TRUE,
+            column(6,
+            selectInput("select_minfi_norm", "Select Normalization", norm_options),
+            div(
+              margin_left = "50px",
+              switchInput(
+                inputId = "select_minfi_dropcphs",
+                label = "Drop CpHs",
+                labelWidth = "fit",
+                value = TRUE,
+                inline = TRUE
+              ),
+              
+              switchInput(
+                inputId = "select_minfi_dropsnps",
+                label = "Drop SNPs",
+                labelWidth = "fit",
+                value = TRUE,
+                inline = TRUE
+              )
+            )),
+            column(6,
+            conditionalPanel(
+              "input.select_minfi_dropsnps",
+              sliderInput(
+                inputId = "slider_minfi_maf",
+                label = "Minimum MAF to filter",
+                min = 0,
+                max = 1,
+                step = 0.01,
+                value = 0,
+                width = "75%"
+              )
+            ),
+            
+            switchInput(
+              inputId = "select_minfi_chromosomes",
+              label = "Drop X/Y Chr.",
+              labelWidth = "fit",
+              value = FALSE
+            )),
+            
+            shinyjs::disabled(actionButton("button_minfi_select", "Select")),
+            h4(),
+            textOutput("text_minfi_probes")
+          ),
+          
+          mainPanel(
+            width = 9,
+            tabsetPanel(
+              
+              ###################################################################################
+              
+              tabPanel(
+                "Control Type",
+                selectInput("controlType", "Choose a control type:",
+                            choices = c(
+                              "BISULFITE CONVERSION I",
+                              "BISULFITE CONVERSION II",
+                              "HYBRIDIZATION",
+                              "SPECIFICITY I",
+                              "SPECIFICITY II",
+                              "TARGET REMOVAL",
+                              "BISULFITE CONVERSION I",
+                              "EXTENSION",
+                              "STAINING",
+                              "NON-POLYMORPHIC"
+                            ), selected = 1),
+                selectInput("select_slide", "Select slide:", choices = c()),
+                withSpinner(plotOutput("controlTypePlotGreen")),
+                withSpinner(plotOutput("controlTypePlotRed"))
+              ),
+              
+              ###################################################################################
+              
+              tabPanel(
+                "Quality Control",
+                h4("Overall Signal"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_qcraw")),
+                h4("Bisulfite Conversion II"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_bisulfiterawII"))
+              ),
+              
+              tabPanel(
+                "Density plot",
+                selectInput("probeType", "Choose a probe type for the density curves:",
+                            choices = c("I-Green","I-Red","II"),
+                            selected="I-Green"),
+                textOutput("prueba1"),
+                textOutput("prueba2"),
+                textOutput("prueba3"),
+                textOutput("prueba4"),
+                h4("Raw"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_densityplotraw")),
+                h4("Processed"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_densityplot")),
+                h4("Violin plot"),
+                withSpinner(plotOutput("graph_violin")),
+                h4("Failure Rate Plot"),
+                textOutput("text"),
+                withSpinner(plotly::plotlyOutput("failure_rate_plot"))
+              ),
+              
+              tabPanel(
+                "Boxplot",
+                h4("Raw"),
+                withSpinner(plotOutput("graph_minfi_boxplotraw")),
+                h4("Processed"),
+                withSpinner(plotOutput("graph_minfi_boxplot"))
+              ),
+              
+              tabPanel(
+                "SNPs Heatmap",
+                h4("SNPs beta-values (Raw)"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_snps"))
+              ),
+              
+              tabPanel(
+                "Sex prediction",
+                h4("X vs Y chromosomes signal plot"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_sex")),
+                withSpinner(DT::DTOutput("table_minfi_sex"))
+              ),
+              
+              tabPanel(
+                "Principal Component Analysis",
+                h4("Processed"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_pcaplot")),
+                withSpinner(DT::DTOutput("table_minfi_pcaplot")),
+                column(
+                  6,
+                  selectInput(
+                    inputId = "select_minfi_pcaplot_pcx",
+                    choices = c(),
+                    label = "Select x variable"
+                  ),
+                  
+                  selectInput(
+                    inputId = "select_minfi_pcaplot_color",
+                    choices = c(),
+                    label = "Select color variable"
+                  )
+                ),
+                column(
+                  6,
+                  selectInput(
+                    inputId = "select_minfi_pcaplot_pcy",
+                    choices = c(),
+                    label = "Select y variable"
+                  )
+                ),
+                actionButton("button_pca_update", "Update")
+              ),
+              
+              tabPanel(
+                "Correlations",
+                h4("Processed"),
+                withSpinner(plotly::plotlyOutput("graph_minfi_corrplot")),
+                selectInput("select_minfi_typecorrplot", "Select data to plot", choices = c("p.value", "correlation value"), selected = "correlation value"),
+                withSpinner(DT::DTOutput("table_minfi_corrplot"))
+              )
+            )
+          )
+        )
+      ),
+      
 
       # INPUT
       tabItem(
@@ -516,9 +762,9 @@ shinyUI(dashboardPage(
                 "Manhattan & Volcano",
                 selectInput(inputId = "select_anncontrast", label = "", choices = "", selected = ""),
                 h4("Manhattan Plot"),
-                withSpinner(plotly::plotlyOutput("manhattan_plot")),
+                withSpinner(plotOutput("manhattan_plot")),
                 h4("Volcano Plot"),
-                withSpinner(plotly::plotlyOutput("volcano_plot"))
+                withSpinner(plotOutput("volcano_plot"))
               )
             )
           )
